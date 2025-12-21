@@ -1,0 +1,24 @@
+[submodule "ix_external/spdlog"]
+	path = ix_external/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "ix_external/glfw"]
+	path = ix_external/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "ix_external/glm"]
+	path = ix_external/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "ix_external/tinygltf"]
+	path = ix_external/tinygltf
+	url = https://github.com/syoyo/tinygltf.git
+[submodule "ix_external/json"]
+	path = ix_external/json
+	url = https://github.com/nlohmann/json.git
+[submodule "ix_external/stb"]
+	path = ix_external/stb
+	url = https://github.com/nothings/stb.git
+[submodule "ix_external/ktx"]
+	path = ix_external/ktx
+	url = https://github.com/KhronosGroup/KTX-Software.git
+[submodule "ix_external/entt"]
+	path = ix_external/entt
+	url = https://github.com/skypjack/entt.git

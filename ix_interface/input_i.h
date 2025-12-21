@@ -6,7 +6,6 @@
 	{
     using IxKeyCallback = std::function<void(IxKey key, int scancode, KeyAction action, int mods)>;
 
-    // Input Interface
     struct Input_I 
 	{
         virtual ~Input_I() = default;
@@ -23,4 +22,4 @@
         // Callbacks
         virtual void setKeyCallback(IxKeyCallback callback) = 0;
     };
-	} // namespace ix
+	}

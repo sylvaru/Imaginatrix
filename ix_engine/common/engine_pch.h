@@ -1,6 +1,5 @@
 #pragma once
 // engine_pch.h
-#include <iostream>
 #include <thread>
 #include <chrono>
 #include <algorithm>
@@ -11,12 +10,12 @@
 #include <vector>
 #include <fstream>
 #include <optional>
+#include <filesystem>
 
-//#include <spdlog/spdlog.h>
+#include <spdlog/spdlog.h>
 
-
-//#include <glm/glm.hpp>
-//#include <json.hpp>
+#include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
 
 
 

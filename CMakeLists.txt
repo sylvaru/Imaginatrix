@@ -4,8 +4,9 @@ project(Imaginatrix LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
+# ----------------------------
 # Options
+# ----------------------------
 option(IMAGINATRIX_BUILD_TESTS "Build tests" ON)
 option(IMAGINATRIX_BUILD_EDITOR "Build editor" OFF)
 option(IMAGINATRIX_BUILD_SHARED "Build libraries as shared" OFF)
@@ -45,7 +46,6 @@ add_subdirectory(ix_external)
 # Core targets
 # ----------------------------
 add_subdirectory(ix_interface)
-#add_subdirectory(ix_renderer)
 add_subdirectory(ix_engine)
 add_subdirectory(sandbox_game)
 
