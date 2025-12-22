@@ -5,23 +5,27 @@
 #include "vk_context.h"
 #include "vk_swapchain.h"
 #include "vk_image.h"	
-
+#include "vk_pipeline.h"
+#include "vk_pipeline_manager.h"
 #include "window_i.h"
 
 
 namespace ix
 {
-	VulkanRenderer::VulkanRenderer(Window_I& window) : m_window(window) {}
+	VulkanRenderer::VulkanRenderer(Window_I& window) 
+		: m_window(window)
+		, m_instance(std::make_unique<VulkanInstance>("Imaginatrix Engine"))
+		, m_context(std::make_unique<VulkanContext>(*m_instance, m_window))
+		, m_pipelineManager(std::make_unique<VulkanPipelineManager>(*m_context))
+	{}
 	VulkanRenderer::~VulkanRenderer() { shutdown(); }
 
 	void VulkanRenderer::init()
 	{
-		m_instance = std::make_unique<VulkanInstance>("Imaginatrix Engine");
-		m_context = std::make_unique<VulkanContext>(*m_instance, m_window);
-
 		recreateSwapchain();
 		createSyncObjects();
 		createCommandBuffers();
+		createDefaultLayout();
 
 		spdlog::info("Vulkan Renderer: Initialized with {} frames in flight", MAX_FRAMES_IN_FLIGHT);
 	}
@@ -29,7 +33,17 @@ namespace ix
 	void VulkanRenderer::shutdown() 
 	{
 		if (!m_context) return;
+
 		vkDeviceWaitIdle(m_context->device());
+
+		if (m_pipelineManager) {
+			m_pipelineManager->clearCache();
+		}
+
+		if (m_defaultLayout != VK_NULL_HANDLE) {
+			vkDestroyPipelineLayout(m_context->device(), m_defaultLayout, nullptr);
+			vkDestroyDescriptorSetLayout(m_context->device(), m_globalDescriptorLayout, nullptr);
+		}
 
 		m_swapchain.reset();
 
@@ -48,6 +62,7 @@ namespace ix
 		vkDeviceWaitIdle(m_context->device());
 		recreateSwapchain();
 	}
+	
 	void VulkanRenderer::beginFrame()
 	{
 		FrameData& frame = getCurrentFrame();
@@ -195,6 +210,71 @@ namespace ix
 			vkCreateSemaphore(m_context->device(), &semInfo, nullptr, &m_frames[i].imageAvailableSemapohore);
 			vkCreateSemaphore(m_context->device(), &semInfo, nullptr, &m_frames[i].renderFinishedSemaphore);
 			vkCreateFence(m_context->device(), &fenceInfo, nullptr, &m_frames[i].inFlightFence);
+		}
+	}
+
+	void VulkanRenderer::loadPipelines(const nlohmann::json& json)
+	{
+
+		std::string shaderRoot = std::string(PROJECT_ROOT_DIR) + "/sandbox_game/res/shaders/spirV/";
+
+		for (const auto& entry : json["pipelines"]) {
+			PipelineState state;
+
+			// Map JSON state to Vulkan Enums
+			state.topology = (entry["state"]["topology"] == "triangle_list") ?
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+
+			state.polygonMode = (entry["state"]["polygonMode"] == "line") ?
+				VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+
+			state.cullMode = (entry["state"]["cullMode"] == "back") ?
+				VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
+
+			state.depthTest = entry["state"]["depthTest"].get<bool>() ? VK_TRUE : VK_FALSE;
+			state.depthWrite = entry["state"]["depthWrite"].get<bool>() ? VK_TRUE : VK_FALSE;
+
+			state.colorAttachmentFormats = { m_swapchain->getFormat() };
+			state.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+
+			std::string vertPath = shaderRoot + entry["vert"].get<std::string>();
+			std::string fragPath = shaderRoot + entry["frag"].get<std::string>();
+
+			m_pipelineManager->createGraphicsPipeline(
+				entry["name"],
+				vertPath,
+				fragPath,
+				state,
+				m_defaultLayout
+			);
+
+			spdlog::info("VulkanRenderer: Created pipeline '{}' using shaders from {}",
+				entry["name"].get<std::string>(), shaderRoot);
+		}
+	}
+
+	void VulkanRenderer::createDefaultLayout() {
+		VkPushConstantRange pushConstant{};
+		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstant.offset = 0;
+		pushConstant.size = sizeof(float) * 16;
+
+		VkDescriptorSetLayoutCreateInfo descLayoutCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		descLayoutCI.bindingCount = 0;
+		descLayoutCI.pBindings = nullptr;
+
+		if (vkCreateDescriptorSetLayout(m_context->device(), &descLayoutCI, nullptr, &m_globalDescriptorLayout) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create descriptor set layout!");
+		}
+
+		VkPipelineLayoutCreateInfo pipelineLayoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+		pipelineLayoutCI.setLayoutCount = 1;
+		pipelineLayoutCI.pSetLayouts = &m_globalDescriptorLayout;
+		pipelineLayoutCI.pushConstantRangeCount = 1;
+		pipelineLayoutCI.pPushConstantRanges = &pushConstant;
+
+		if (vkCreatePipelineLayout(m_context->device(), &pipelineLayoutCI, nullptr, &m_defaultLayout) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create pipeline layout!");
 		}
 	}
 

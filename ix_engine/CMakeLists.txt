@@ -13,6 +13,12 @@ add_library(ix_engine STATIC
     platform/rendering/vk/vk_context.h
     platform/rendering/vk/vk_swapchain.h
     platform/rendering/vk/vk_swapchain.cpp
+    platform/rendering/vk/vk_image.h
+    platform/rendering/vk/vk_image.cpp
+    platform/rendering/vk/vk_pipeline.h
+    platform/rendering/vk/vk_pipeline.cpp
+    platform/rendering/vk/vk_pipeline_manager.h
+    platform/rendering/vk/vk_pipeline_manager.cpp
     platform/rendering/vk/vk_renderer.h 
     platform/rendering/vk/vk_renderer.cpp
 
@@ -26,11 +32,14 @@ add_library(ix_engine STATIC
 
     engine.h
     engine.cpp
-  "platform/rendering/vk/vk_image.h" "platform/rendering/vk/vk_image.cpp")
+  )
 
 target_precompile_headers(ix_engine
     PRIVATE
     common/engine_pch.h
+)
+add_compile_definitions(
+    IX_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 target_include_directories(ix_engine
@@ -44,8 +53,8 @@ target_link_libraries(ix_engine
         glm
         nlohmann_json::nlohmann_json
         entt
-    PRIVATE 
         spdlog::spdlog_header_only
+    PRIVATE 
         glfw
         vulkan_i
 )

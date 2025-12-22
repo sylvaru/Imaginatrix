@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 
-
 #include "renderer_i.h"
 #include "window_i.h"
 
@@ -14,7 +13,6 @@ namespace ix
 	class Layer_I;
 	class GlfwPlatform;
 }
-
 
 namespace ix
 {
@@ -41,10 +39,14 @@ namespace ix
 			layer->onAttach();
 		}
 
+		static Engine& get() { return *s_instance; }
+		Renderer_I& getRenderer() { return *m_renderer; }
+
 		void setupInputCallbacks();
 		void processInput();
 		void toggleCursorLock();
 	private:
+		static Engine* s_instance;
 		std::vector<std::shared_ptr<Layer_I>> m_layers;
 		std::unique_ptr<GlfwPlatform> m_platform;
 		std::unique_ptr<Renderer_I> m_renderer;

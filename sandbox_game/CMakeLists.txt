@@ -9,6 +9,10 @@ target_sources(sandbox_game
         common/game_pch.h
 )
 
+add_compile_definitions(
+    GAME_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 target_precompile_headers(sandbox_game
     PRIVATE
     common/game_pch.h
@@ -25,5 +29,6 @@ target_link_libraries(sandbox_game
         ix_engine
         glm
         nlohmann_json::nlohmann_json
+        spdlog::spdlog_header_only
 )
 

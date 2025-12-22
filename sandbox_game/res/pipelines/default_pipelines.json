@@ -1,0 +1,16 @@
+{
+    "pipelines": [
+        {
+            "name": "test",
+            "vert": "test.vert.spv",
+            "frag": "test.frag.spv",
+            "state": {
+                "topology": "triangle_list",
+                "polygonMode": "fill",
+                "cullMode": "back",
+                "depthTest": true,
+                "depthWrite": true
+            }
+        }
+    ]
+}

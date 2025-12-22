@@ -6,8 +6,8 @@ int main()
 	ix::EngineSpecification engineSpec;
 	engineSpec.windowSpec.mode = ix::WindowMode::Windowed;
 	ix::Engine engine(engineSpec);
-	engine.pushLayer<GameLayer>();
 	engine.init();
+	engine.pushLayer<GameLayer>();
 	engine.run();
 	return 0;
 }

@@ -10,17 +10,22 @@
 
 namespace ix
 {
+
+	Engine* Engine::s_instance = nullptr;
 	Engine::Engine(const EngineSpecification spec)
 		: m_platform(std::make_unique<GlfwPlatform>(spec.windowSpec, spec.name))
 		, m_window(*m_platform)
 		, m_input(*m_platform)
 	{
+		if (s_instance) { spdlog::error("Engine instance alredy exists!"); }
+		s_instance = this;
 		m_renderer = createRenderer(m_window, spec.api);
 	}
 
 	Engine::~Engine()
 	{
 		SceneManager::shutdown();
+		s_instance = nullptr;
 	}
 
 	void Engine::init()

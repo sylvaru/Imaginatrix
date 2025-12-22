@@ -3,13 +3,14 @@
 #include "renderer_i.h"
 #include <vulkan/vulkan.h>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 namespace ix 
 {
     class VulkanInstance;
 	class VulkanContext;
 	class VulkanSwapchain;
-	class VulkanPipeline; 
+	class VulkanPipelineManager; 
 }
 
 namespace ix
@@ -34,9 +35,6 @@ namespace ix
         VkCommandBuffer commandBuffer;
     };
 
-    /*
-        The VulkanRenderer will own the VulkanInstance first, then use it to initialize the VulkanContext.
-    */
 	
 	class VulkanRenderer : public Renderer_I 
 	{
@@ -54,6 +52,8 @@ namespace ix
 
         void submitScene(Scene& scene, float alpha) override;
 
+        void loadPipelines(const nlohmann::json& json) override;
+
         // Getters
         FrameData& getCurrentFrame() { return m_frames[m_currentFrameIndex]; }
 
@@ -62,6 +62,8 @@ namespace ix
         void recreateSwapchain();
         void createCommandBuffers();
         void createSyncObjects();
+
+        void createDefaultLayout();
 
     private:
         Window_I& m_window;
@@ -76,6 +78,11 @@ namespace ix
         static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
         FrameData m_frames[MAX_FRAMES_IN_FLIGHT]{};
         int m_currentFrameIndex = 0;
+
+        std::unique_ptr<VulkanPipelineManager> m_pipelineManager;
+        
+        VkPipelineLayout m_defaultLayout;
+        VkDescriptorSetLayout m_globalDescriptorLayout;
 
 	};
 }

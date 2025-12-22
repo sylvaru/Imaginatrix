@@ -3,9 +3,12 @@
 
 #include <memory>
 #include <glm/glm.hpp>
+#include <nlohmann/json_fwd.hpp>
 
-
-namespace ix { class Scene; }
+namespace ix 
+{ 
+    class Scene; 
+}
 
 namespace ix {
 
@@ -36,7 +39,7 @@ namespace ix {
         // The Engine passes the entire scene, and the renderer queries the Registry
         virtual void submitScene(Scene& scene, float alpha) = 0;
 
-
+        virtual void loadPipelines(const nlohmann::json& json) {}
 
     };
 }
