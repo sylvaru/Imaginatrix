@@ -1,9 +1,12 @@
+// glfw_platform.h
 #pragma once
 #include <bitset>
+#include <string>
 #include <GLFW/glfw3.h>
 
 #include "window_i.h"
 #include "input_i.h"
+
 
 namespace ix
 {

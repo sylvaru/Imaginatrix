@@ -6,17 +6,16 @@ project(ix_engine)
 add_library(ix_engine STATIC
     platform/glfw_platform.h
     platform/glfw_platform.cpp
-    platform/rendering/vk/vk_renderer.h 
-    platform/rendering/vk/vk_renderer.cpp
+    platform/rendering/rendering_api.cpp
     platform/rendering/vk/vk_instance.h
     platform/rendering/vk/vk_instance.cpp
     platform/rendering/vk/vk_context.cpp
     platform/rendering/vk/vk_context.h
-    platform/rendering/rendering_api.cpp
+    platform/rendering/vk/vk_swapchain.h
+    platform/rendering/vk/vk_swapchain.cpp
+    platform/rendering/vk/vk_renderer.h 
+    platform/rendering/vk/vk_renderer.cpp
 
-
-    core/engine.h
-    core/engine.cpp
     core/asset_manager.h
     core/asset_manager.cpp
     core/scene.h
@@ -24,7 +23,10 @@ add_library(ix_engine STATIC
     core/scene_manager.h
     core/scene_manager.cpp
     core/entity.h
-)
+
+    engine.h
+    engine.cpp
+  "platform/rendering/vk/vk_image.h" "platform/rendering/vk/vk_image.cpp")
 
 target_precompile_headers(ix_engine
     PRIVATE

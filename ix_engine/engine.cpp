@@ -1,8 +1,12 @@
 // engine.cpp
 #include "common/engine_pch.h"
 #include "engine.h"
-#include "scene_manager.h"
+#include "core/scene_manager.h"
 #include "platform/rendering/rendering_api.h"
+#include "platform/glfw_platform.h"
+
+#include "input_i.h"
+#include "layer_i.h"
 
 namespace ix
 {
@@ -25,7 +29,9 @@ namespace ix
 
 		m_window.lockCursor(m_cursorLocked);
 		setupInputCallbacks();
-
+		
+		// Init core systems
+		m_renderer->init();
 		SceneManager::init();
 	}
 
@@ -63,6 +69,7 @@ namespace ix
 
 				accumulator -= dt;
 			}
+			m_renderer->beginFrame();
 
 			float alpha = static_cast<float>(accumulator / dt);
 			for (auto& layer : m_layers) {
@@ -73,7 +80,7 @@ namespace ix
 				layer->onRender(alpha);
 			}
 
-			//m_renderer.endFrame();
+			m_renderer->endFrame();
 	
 		}
 	}

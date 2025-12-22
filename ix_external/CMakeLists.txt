@@ -30,10 +30,13 @@ add_subdirectory(json)
 # ==========================================================
 # KTX (Texture Loading)
 # ==========================================================
-set(KTX_FEATURE_STATIC_LIBRARY ON CACHE BOOL "" FORCE)
-set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
-set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
-add_subdirectory(ktx)
+add_library(ktx INTERFACE)
+
+target_include_directories(ktx INTERFACE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/ktx/interface"      # Main public API (ktx.h)
+    "${CMAKE_CURRENT_SOURCE_DIR}/ktx/other_include"  # Support headers
+    "${CMAKE_CURRENT_SOURCE_DIR}/ktx/lib"            # Internal library headers
+)
 
 # ==========================================================
 # STB (Image/Utility - header-only)

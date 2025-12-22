@@ -1,12 +1,12 @@
+// vk_renderer.h
 #pragma once
 #include "renderer_i.h"
-#include "vk_context.h"
-
 #include <vulkan/vulkan.h>
-
+#include <memory>
 
 namespace ix 
 {
+    class VulkanInstance;
 	class VulkanContext;
 	class VulkanSwapchain;
 	class VulkanPipeline; 
@@ -23,6 +23,15 @@ namespace ix
         VkBuffer indexBuffer;
         uint32_t indexCount;
         glm::mat4 transform;
+    };
+
+    struct FrameData
+    {
+        VkSemaphore imageAvailableSemapohore;
+        VkSemaphore renderFinishedSemaphore;
+        VkFence inFlightFence;
+        VkCommandPool commandPool;
+        VkCommandBuffer commandBuffer;
     };
 
     /*
@@ -45,6 +54,9 @@ namespace ix
 
         void submitScene(Scene& scene, float alpha) override;
 
+        // Getters
+        FrameData& getCurrentFrame() { return m_frames[m_currentFrameIndex]; }
+
     private:
         // Internal Helpers
         void recreateSwapchain();
@@ -56,8 +68,14 @@ namespace ix
 
         std::unique_ptr<VulkanInstance> m_instance;
         std::unique_ptr<VulkanContext> m_context;
+        std::unique_ptr<VulkanSwapchain> m_swapchain;
 
+        uint32_t m_currentImageIndex = 0;
         VkCommandPool m_commandPool = VK_NULL_HANDLE;
+
+        static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+        FrameData m_frames[MAX_FRAMES_IN_FLIGHT]{};
+        int m_currentFrameIndex = 0;
 
 	};
 }

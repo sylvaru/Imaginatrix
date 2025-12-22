@@ -1,12 +1,19 @@
+// engine.h
 #pragma once
 #include <string>
 #include <memory>
 #include <vector>
-#include "window_i.h"
-#include "input_i.h"
-#include "layer_i.h"
+
+
 #include "renderer_i.h"
-#include "platform/glfw_platform.h"
+#include "window_i.h"
+
+namespace ix 
+{
+	class Input_I;
+	class Layer_I;
+	class GlfwPlatform;
+}
 
 
 namespace ix
