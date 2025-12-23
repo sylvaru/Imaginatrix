@@ -3,8 +3,10 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 
-namespace ix {
-    class VulkanInstance {
+namespace ix 
+{
+    class VulkanInstance 
+    {
     public:
         VulkanInstance(const char* appName);
         ~VulkanInstance();

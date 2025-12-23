@@ -5,6 +5,7 @@
 
 #include <set>
 #include <GLFW/glfw3.h>
+#include <vk_mem_alloc.h>
 
 
 namespace ix {
@@ -18,14 +19,16 @@ namespace ix {
         pickPhysicalDevice(instance.get());
         checkCapabilities();
         createLogicalDevice();
+        createAllocator(instance.get());
+        createImmCommandPool();
     }
 
-    VulkanContext::~VulkanContext() 
+    VulkanContext::~VulkanContext()
     {
-        if (m_logicalDevice)
-        vkDestroyDevice(m_logicalDevice, nullptr);
-        if (m_surface)
-        vkDestroySurfaceKHR(m_instanceHandle, m_surface, nullptr);
+        if (m_immCommandPool != VK_NULL_HANDLE) vkDestroyCommandPool(m_logicalDevice, m_immCommandPool, nullptr);
+        if (m_allocator) vmaDestroyAllocator(m_allocator);
+        if (m_logicalDevice) vkDestroyDevice(m_logicalDevice, nullptr);
+        if (m_surface) vkDestroySurfaceKHR(m_instanceHandle, m_surface, nullptr);
     }
 
     void VulkanContext::createSurface(VkInstance instance) 
@@ -40,7 +43,18 @@ namespace ix {
             &m_surface
         );
     }
+    void VulkanContext::createAllocator(VkInstance instance)
+    {
+        VmaAllocatorCreateInfo allocatorInfo = {};
+        allocatorInfo.physicalDevice = m_physicalDevice;
+        allocatorInfo.device = m_logicalDevice;
+        allocatorInfo.instance = instance;
+        allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 
+        if (vmaCreateAllocator(&allocatorInfo, &m_allocator) != VK_SUCCESS) {
+            throw std::runtime_error("VulkanContext: Failed to create VMA allocator!");
+        }
+    }
 
     void VulkanContext::pickPhysicalDevice(VkInstance instance) 
     {
@@ -108,7 +122,7 @@ namespace ix {
             queueCreateInfos.push_back(qci);
         }
 
-        // Feature Chain: 1.3 Features
+        // Feature 1.3 Features
         VkPhysicalDeviceVulkan13Features features13{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
         features13.dynamicRendering = VK_TRUE;
         features13.synchronization2 = VK_TRUE;
@@ -137,7 +151,7 @@ namespace ix {
         vkGetDeviceQueue(m_logicalDevice, m_queueFamilyIndices.presentFamily, 0, &m_presentQueue);
     }
 
-    QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device)
+    QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device) const
     {
         QueueFamilyIndices indices;
         uint32_t queueFamilyCount = 0;
@@ -234,5 +248,59 @@ namespace ix {
             requiredExtensions.erase(extension.extensionName);
         }
         return requiredExtensions.empty();
+    }
+
+    void VulkanContext::createImmCommandPool() 
+    {
+        VkCommandPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex = m_queueFamilyIndices.graphicsFamily;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT; // Optimization for short-lived buffers
+
+        if (vkCreateCommandPool(m_logicalDevice, &poolInfo, nullptr, &m_immCommandPool) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create immediate command pool!");
+        }
+    }
+
+    void VulkanContext::immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func) const
+    {
+        if (!this) {
+            spdlog::error("VulkanContext::immediateSubmit called on NULL or invalid context!");
+            return;
+        }
+
+        VkCommandBufferAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandPool = m_immCommandPool;
+        allocInfo.commandBufferCount = 1;
+
+        VkCommandBuffer cmd;
+        if (vkAllocateCommandBuffers(m_logicalDevice, &allocInfo, &cmd) != VK_SUCCESS) {
+            spdlog::error("Failed to allocate immediate command buffer!");
+            return;
+        }
+
+        VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkBeginCommandBuffer(cmd, &beginInfo);
+        func(cmd);
+        vkEndCommandBuffer(cmd);
+
+        VkFenceCreateInfo fenceInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+        VkFence fence;
+        vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &fence);
+
+        VkSubmitInfo submitInfo{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &cmd;
+
+        vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, fence);
+
+        // Wait for the fence (more robust than QueueWaitIdle)
+        vkWaitForFences(m_logicalDevice, 1, &fence, VK_TRUE, UINT64_MAX);
+
+        vkDestroyFence(m_logicalDevice, fence, nullptr);
+        vkFreeCommandBuffers(m_logicalDevice, m_immCommandPool, 1, &cmd);
     }
 }

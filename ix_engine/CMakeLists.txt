@@ -4,6 +4,12 @@ cmake_minimum_required(VERSION 3.24)
 project(ix_engine)
 
 add_library(ix_engine STATIC
+
+    # Misc depends
+    common/vk_mem_alloc.cpp 
+    common/handles.h
+
+    # Platform/API specific
     platform/glfw_platform.h
     platform/glfw_platform.cpp
     platform/rendering/rendering_api.cpp
@@ -19,9 +25,24 @@ add_library(ix_engine STATIC
     platform/rendering/vk/vk_pipeline.cpp
     platform/rendering/vk/vk_pipeline_manager.h
     platform/rendering/vk/vk_pipeline_manager.cpp
+    platform/rendering/vk/vk_descriptor_manager.h
+    platform/rendering/vk/vk_descriptor_manager.cpp
+    platform/rendering/vk/vk_buffer.h
+    platform/rendering/vk/vk_buffer.cpp
     platform/rendering/vk/vk_renderer.h 
     platform/rendering/vk/vk_renderer.cpp
+    platform/rendering/vk/render_graph/vk_render_graph_registry.h
+    platform/rendering/vk/render_graph/vk_render_graph_registry.cpp
+    platform/rendering/vk/render_graph/vk_render_graph.h
+    platform/rendering/vk/render_graph/vk_render_graph.cpp
+    platform/rendering/vk/render_graph/vk_render_graph_builder.h
+    platform/rendering/vk/render_graph/vk_render_graph_builder.cpp
+    platform/rendering/vk/resource_types/vk_resource_types.h
+    platform/rendering/vk/resource_types/vk_resource_types.cpp
+    platform/rendering/vk/passes/forward_pass.h 
+    platform/rendering/vk/passes/forward_pass.cpp
 
+    # Core
     core/asset_manager.h
     core/asset_manager.cpp
     core/scene.h
@@ -29,10 +50,11 @@ add_library(ix_engine STATIC
     core/scene_manager.h
     core/scene_manager.cpp
     core/entity.h
+    core/components.h
 
     engine.h
     engine.cpp
-  )
+)
 
 target_precompile_headers(ix_engine
     PRIVATE
@@ -54,7 +76,10 @@ target_link_libraries(ix_engine
         nlohmann_json::nlohmann_json
         entt
         spdlog::spdlog_header_only
+        vulkan_i
+        vma
     PRIVATE 
         glfw
-        vulkan_i
+        stb
+        tinygltf
 )

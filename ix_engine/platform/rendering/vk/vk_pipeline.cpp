@@ -12,6 +12,7 @@ namespace ix
         const PipelineState& state,
         VkPipelineLayout layout)
         : m_context(context)
+        , m_layout(layout)
     {
         auto vertCode = readFile(vertPath);
         auto fragCode = readFile(fragPath);
@@ -96,7 +97,7 @@ namespace ix
         pipelineCI.pDepthStencilState = &depthStencil;
         pipelineCI.pColorBlendState = &colorBlending;
         pipelineCI.pDynamicState = &dynamicInfo;
-        pipelineCI.layout = layout;
+        pipelineCI.layout = m_layout;
 
         if (vkCreateGraphicsPipelines(m_context.device(), VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &m_pipeline) != VK_SUCCESS) {
             throw std::runtime_error("Failed to create modern graphics pipeline!");

@@ -3,12 +3,13 @@
 #include <vulkan/vulkan.h>
 
 
-namespace ix
-{
-    class VulkanContext;
-}
+struct VmaAllocation_T;
+typedef struct VmaAllocation_T* VmaAllocation;
+
 namespace ix 
 {
+    class VulkanContext;
+
     class VulkanImage 
     {
     public:
@@ -32,12 +33,13 @@ namespace ix
 
         VulkanContext& m_context;
         VkImage m_handle = VK_NULL_HANDLE;
-        VkDeviceMemory m_memory = VK_NULL_HANDLE;
         VkImageView m_view = VK_NULL_HANDLE;
+        VmaAllocation m_allocation = VK_NULL_HANDLE;
 
         VkFormat m_format;
         VkExtent2D m_extent;
-        VkImageLayout m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        volatile VkImageLayout m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         bool m_isBorrowed = false;
+
     };
 }

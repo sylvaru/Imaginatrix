@@ -4,21 +4,27 @@
 #include <memory>
 #include <string>
 #include <vulkan/vulkan.h>
+#include "vk_pipeline.h"
+
 
 namespace ix
 {
-	class VulkanPipeline;
 	class VulkanContext;
-    struct PipelineState;
-}
 
-namespace ix
-{
 
     struct PipelineHasher
     {
         size_t operator() (const PipelineState& s) const;
     };
+
+    struct PipelineDefinition {
+        std::string name;
+        std::string vertPath;
+        std::string fragPath;
+        PipelineState baseState;
+        VkPipelineLayout layout;
+    };
+
     class VulkanPipelineManager {
     public:
         VulkanPipelineManager(VulkanContext& context);
@@ -31,14 +37,20 @@ namespace ix
             const PipelineState& state,
             VkPipelineLayout layout);
 
+        void reloadPipelines();
+
         void clearCache();
 
         // Getters
-        VulkanPipeline* getGraphicsPipeline(const PipelineState& state) const; // Get by state "Preffered"
+        VulkanPipeline* getGraphicsPipeline(PipelineState requestedState); // Get by state "Preffered"
         VulkanPipeline* getGraphicsPipeline(const std::string& name) const; // Get by name
 
     private:
+
+        VulkanPipeline* bakePipeline(const PipelineDefinition& def);
+
         VulkanContext& m_context;
+        std::vector<PipelineDefinition> m_definitions;
         std::unordered_map<PipelineState, std::shared_ptr<VulkanPipeline>, PipelineHasher> m_stateCache; // Pipeline state cache
         std::unordered_map<std::string, std::shared_ptr<VulkanPipeline>> m_namedCache; // Pipeline name cache
 

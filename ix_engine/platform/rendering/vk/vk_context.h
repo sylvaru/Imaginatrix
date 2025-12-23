@@ -3,15 +3,20 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 
-namespace ix
-{
-    class VulkanInstance;
-    struct Window_I;
-}
+
+struct VmaAllocator_T;
+using VmaAllocator = VmaAllocator_T*;
+
+
 namespace ix
 {
 
-    struct VulkanCapabilities {
+    class VulkanInstance;
+    struct Window_I;
+
+
+    struct VulkanCapabilities 
+    {
         bool hasDynamicRendering = false;
         bool hasBindlessIndexing = false;
         bool hasRayTracing = false;
@@ -25,46 +30,64 @@ namespace ix
         std::vector<VkPresentModeKHR> presentModes;
     };
 
-    struct QueueFamilyIndices {
+    struct QueueFamilyIndices 
+    {
         uint32_t graphicsFamily;
         uint32_t presentFamily;
         bool graphicsFamilyHasValue = false;
         bool presentFamilyHasValue = false;
-        bool isComplete() { return graphicsFamilyHasValue && presentFamilyHasValue; }
+        bool isComplete() const { return graphicsFamilyHasValue && presentFamilyHasValue; }
     };
 
-    class VulkanContext {
+    class VulkanContext 
+    {
     public:
         VulkanContext(VulkanInstance& instance, Window_I& window);
         ~VulkanContext();
 
-        // Getters
+        // Public helper
+        void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func) const;
+
+
+        // Getters and setters
         VkDevice device() const { return m_logicalDevice; }
         VkPhysicalDevice physicalDevice() const { return m_physicalDevice; }
         VkSurfaceKHR surface() const { return m_surface; }
         VkQueue graphicsQueue() const { return m_graphicsQueue; }
         const VulkanCapabilities& getCaps() const { return m_capabilities; }
+        VkCommandPool getImmCommandPool() const { return m_immCommandPool; }
 
         bool useDynamicRendering() const { return m_capabilities.hasDynamicRendering; }
 
         uint32_t getGraphicsFamily() const { return m_queueFamilyIndices.graphicsFamily; }
         VkQueue getGraphicsQueue() const { return m_graphicsQueue; }
         VkQueue getPresentQueue() const { return m_presentQueue; }
+        VmaAllocator getAllocator() const { return m_allocator; }
+
+        VkFormat getSwapchainFormat() const { return m_swapchainFormat; }
+        VkFormat getDepthFormat() const { return m_depthFormat; }
+
+        // These are called by the Renderer when the Swapchain is (re)created
+        void setSwapchainFormat(VkFormat format) { m_swapchainFormat = format; }
+        void setDepthFormat(VkFormat format) { m_depthFormat = format; }
 
     private:
         void createSurface(VkInstance instance);
         void pickPhysicalDevice(VkInstance instance);
         void createLogicalDevice();
         void checkCapabilities();
+        void createAllocator(VkInstance instance);
 
-        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) const;
         bool isDeviceSuitable(VkPhysicalDevice device);
         SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
         bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
     private:
         Window_I& m_window;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
         VkInstance m_instanceHandle;
+        VmaAllocator m_allocator = VK_NULL_HANDLE;
 
         VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
         VkDevice m_logicalDevice = VK_NULL_HANDLE;
@@ -73,6 +96,12 @@ namespace ix
         QueueFamilyIndices m_queueFamilyIndices;
         VkQueue m_graphicsQueue = VK_NULL_HANDLE;
         VkQueue m_presentQueue = VK_NULL_HANDLE;
+
+        VkCommandPool m_immCommandPool = VK_NULL_HANDLE;
+        void createImmCommandPool();
+
+        VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
+        VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
 
 
         const std::vector<const char*> m_deviceExtensions =

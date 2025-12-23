@@ -60,7 +60,6 @@ namespace ix
             width = mode->width;
             height = mode->height;
 
-            // Optional but recommended for true exclusive
             glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
             break;
         }
@@ -104,25 +103,30 @@ namespace ix
         return glfwWindowShouldClose(m_window);
     }
 
-    void GlfwPlatform::requestWindowClose() {
+    void GlfwPlatform::requestWindowClose() 
+    {
         glfwSetWindowShouldClose(m_window, GLFW_TRUE);
     }
 
-    void GlfwPlatform::getFramebufferSize(int& width, int& height) const {
+    void GlfwPlatform::getFramebufferSize(int& width, int& height) const 
+    {
         glfwGetFramebufferSize(m_window, &width, &height);
     }
 
-    void GlfwPlatform::setUserPointer(void* ptr) {
+    void GlfwPlatform::setUserPointer(void* ptr) 
+    {
         glfwSetWindowUserPointer(m_window, ptr);
     }
 
-    void* GlfwPlatform::getWindowUserPointer() const {
+    void* GlfwPlatform::getWindowUserPointer() const 
+    {
         return glfwGetWindowUserPointer(m_window);
     }
 
 
     // Input API
-    static const std::unordered_map<IxKey, int> IX_TO_GLFW = {
+    static const std::unordered_map<IxKey, int> IX_TO_GLFW = 
+    {
         { IxKey::W, GLFW_KEY_W },
         { IxKey::A, GLFW_KEY_A },
         { IxKey::S, GLFW_KEY_S },
@@ -140,20 +144,24 @@ namespace ix
         return (it != IX_TO_GLFW.end()) ? it->second : -1;
     }
 
-    IxKey GlfwPlatform::fromGlfwKey(int glfwKey) const {
-        for (const auto& [ix, glfw] : IX_TO_GLFW) {
+    IxKey GlfwPlatform::fromGlfwKey(int glfwKey) const 
+    {
+        for (const auto& [ix, glfw] : IX_TO_GLFW) 
+        {
             if (glfw == glfwKey) return ix;
         }
         return static_cast<IxKey>(glfwKey);
     }
 
-    KeyAction GlfwPlatform::translateAction(int action) const {
+    KeyAction GlfwPlatform::translateAction(int action) const 
+    {
         if (action == GLFW_PRESS) return KeyAction::PRESS;
         if (action == GLFW_RELEASE) return KeyAction::RELEASE;
         return KeyAction::REPEAT;
     }
 
-    void GlfwPlatform::lockCursor(bool lock) {
+    void GlfwPlatform::lockCursor(bool lock) 
+    {
         m_cursorLocked = lock;
         glfwSetInputMode(
             m_window,
@@ -163,17 +171,20 @@ namespace ix
         m_firstMouse = true;
     }
 
-    bool GlfwPlatform::isKeyPressed(IxKey key) const {
+    bool GlfwPlatform::isKeyPressed(IxKey key) const 
+    {
         int glfwKey = toGlfwKey(key);
         if (glfwKey < 0 || glfwKey >= 512) return false;
         return m_keyStates.test(glfwKey);
     }
 
-    bool GlfwPlatform::isMouseButtonPressed(int button) const {
+    bool GlfwPlatform::isMouseButtonPressed(int button) const 
+    {
         return glfwGetMouseButton(m_window, button) == GLFW_PRESS;
     }
 
-    void GlfwPlatform::consumeMouseDelta(double& dx, double& dy) {
+    void GlfwPlatform::consumeMouseDelta(double& dx, double& dy) 
+    {
         dx = m_accumDX;
         dy = m_accumDY;
         m_accumDX = 0.0;
@@ -181,11 +192,13 @@ namespace ix
     }
 
     // Callbacks
-    void GlfwPlatform::setKeyCallback(IxKeyCallback callback) {
+    void GlfwPlatform::setKeyCallback(IxKeyCallback callback) 
+    {
         m_keyCallback = std::move(callback);
     }
 
-    void GlfwPlatform::framebufferResizeCallback(GLFWwindow* window, int w, int h) {
+    void GlfwPlatform::framebufferResizeCallback(GLFWwindow* window, int w, int h) 
+    {
         auto* self = static_cast<GlfwPlatform*>(glfwGetWindowUserPointer(window));
         if (!self) return;
 
@@ -194,7 +207,8 @@ namespace ix
         self->m_height = static_cast<uint32_t>(h);
     }
 
-    void GlfwPlatform::cursorPosCallback(GLFWwindow* window, double x, double y) {
+    void GlfwPlatform::cursorPosCallback(GLFWwindow* window, double x, double y) 
+    {
         auto* self = static_cast<GlfwPlatform*>(glfwGetWindowUserPointer(window));
         if (!self || !self->m_cursorLocked) return;
 
@@ -212,7 +226,8 @@ namespace ix
         self->m_lastY = y;
     }
 
-    void GlfwPlatform::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    void GlfwPlatform::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
+    {
         auto* self = static_cast<GlfwPlatform*>(glfwGetWindowUserPointer(window));
         if (!self || key < 0 || key >= 512) return;
 

@@ -6,9 +6,7 @@
 namespace ix
 {
     class VulkanContext;
-}
 
-namespace ix {
 
     struct PipelineState {
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -49,8 +47,12 @@ namespace ix {
         std::vector<uint32_t> readFile(const std::string& filepath);
         void createShaderModule(VulkanContext& context, const std::vector<uint32_t>& code, VkShaderModule* shaderModule);
 
+        VkPipeline getHandle() const { return m_pipeline; }
+        VkPipelineLayout getLayout() const { return m_layout; }
+
     private:
         VulkanContext& m_context;
         VkPipeline m_pipeline = VK_NULL_HANDLE;
+        VkPipelineLayout m_layout = VK_NULL_HANDLE;
     };
 }

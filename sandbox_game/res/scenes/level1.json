@@ -1,0 +1,9 @@
+{
+    "entities": [
+        {
+            "name": "TestPlane",
+            "transform": { "pos": [ 0, 0, -5 ] },
+            "mesh": "plane.gltf"
+        }
+    ]
+}

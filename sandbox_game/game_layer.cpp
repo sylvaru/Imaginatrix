@@ -1,31 +1,33 @@
+// game_layer.cpp
 #include "common/game_pch.h"
 #include "game_layer.h"
 #include "core/scene_manager.h"
 #include "core/scene.h"
 #include "engine.h"
+#include "core/components.h"
 #include <spdlog/spdlog.h>
 
 using namespace ix;
 void GameLayer::onAttach()
 {
 
-    Scene& scene = SceneManager::getActiveScene();
+    // Define the base resource path for this specific game
+    std::string resPath = std::string(PROJECT_ROOT_DIR) + "/sandbox_game/res/";
 
-    std::string jsonPath = std::string(PROJECT_ROOT_DIR) + "/sandbox_game/res/pipelines/default_pipelines.json";
+    // Setup 
+    SceneManager::setSceneRoot(resPath + "scenes/");
+    AssetManager::get().setModelRoot(resPath + "models/");
 
-    std::ifstream file(jsonPath);
-    if (!file.is_open()) {
-        spdlog::error("GameLayer: Could not open pipeline config at {}", jsonPath);
-        return;
+    // Load Pipelines
+    std::string pipelinePath = resPath + "pipelines/default_pipelines.json";
+    std::ifstream pipelineFile(pipelinePath);
+    if (pipelineFile.is_open()) {
+        nlohmann::json pipelineData = nlohmann::json::parse(pipelineFile);
+        Engine::get().getRenderer().loadPipelines(pipelineData);
     }
 
-    try {
-        nlohmann::json data = nlohmann::json::parse(file);
-        Engine::get().getRenderer().loadPipelines(data);
-    }
-    catch (const std::exception& e) {
-        spdlog::error("GameLayer: JSON Parse Error: {}", e.what());
-    }
+    // Load the actual level
+    SceneManager::load("level1");
 }
 
 void GameLayer::onFixedUpdate(float fixedDt) 

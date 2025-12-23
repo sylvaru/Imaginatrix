@@ -6,16 +6,14 @@
 
 #include "renderer_i.h"
 #include "window_i.h"
+#include "core/asset_manager.h"
 
 namespace ix 
 {
 	class Input_I;
 	class Layer_I;
 	class GlfwPlatform;
-}
 
-namespace ix
-{
 
 	struct EngineSpecification
 	{
@@ -23,6 +21,7 @@ namespace ix
 		WindowSpecification windowSpec;
 		RendererAPI api = RendererAPI::Vulkan;
 	};
+
 	class Engine
 	{
 	public:
@@ -40,12 +39,15 @@ namespace ix
 		}
 
 		static Engine& get() { return *s_instance; }
+		static AssetManager& getAssetManager() { return AssetManager::get(); }
 		Renderer_I& getRenderer() { return *m_renderer; }
+	
 
 		void setupInputCallbacks();
 		void processInput();
 		void toggleCursorLock();
 	private:
+		void shutdown();
 		static Engine* s_instance;
 		std::vector<std::shared_ptr<Layer_I>> m_layers;
 		std::unique_ptr<GlfwPlatform> m_platform;

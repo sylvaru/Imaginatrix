@@ -19,12 +19,21 @@ namespace ix
 
 	VulkanSwapchain::~VulkanSwapchain()
 	{
-		// Cleanup per-image semaphores
+		VkDevice device = m_context.device();
+
 		for (auto& frame : m_frames) {
-			vkDestroySemaphore(m_context.device(), frame.renderFinishedSemaphore, nullptr);
+			if (frame.renderFinishedSemaphore != VK_NULL_HANDLE) {
+				vkDestroySemaphore(device, frame.renderFinishedSemaphore, nullptr);
+				frame.renderFinishedSemaphore = VK_NULL_HANDLE;
+			}
 		}
 
-		vkDestroySwapchainKHR(m_context.device(), m_swapchain, nullptr);
+		m_frames.clear();
+
+		if (m_swapchain != VK_NULL_HANDLE) {
+			vkDestroySwapchainKHR(device, m_swapchain, nullptr);
+			m_swapchain = VK_NULL_HANDLE;
+		}
 	}
 	void VulkanSwapchain::create(VkSwapchainKHR oldHandle)
 	{
@@ -65,8 +74,9 @@ namespace ix
 
 		uint32_t actualImageCount;
 		vkGetSwapchainImagesKHR(m_context.device(), m_swapchain, &actualImageCount, nullptr);
-		std::vector<VkImage> rawImages(actualImageCount);
-		vkGetSwapchainImagesKHR(m_context.device(), m_swapchain, &actualImageCount, rawImages.data());
+		
+		m_images.resize(actualImageCount);
+		vkGetSwapchainImagesKHR(m_context.device(), m_swapchain, &actualImageCount, m_images.data());
 
 		m_frames.resize(actualImageCount);
 
@@ -75,7 +85,7 @@ namespace ix
 		for (uint32_t i = 0; i < actualImageCount; i++) {
 			m_frames[i].image = std::make_unique<VulkanImage>(
 				m_context,
-				rawImages[i],
+				m_images[i],
 				m_imageFormat,
 				m_extent
 			);
@@ -101,9 +111,19 @@ namespace ix
 	VkSurfaceFormatKHR VulkanSwapchain::chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) 
 	{
 		for (const auto& fmt : formats) {
-			if (fmt.format == VK_FORMAT_B8G8R8A8_SRGB && fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+			if (fmt.format == VK_FORMAT_B8G8R8A8_SRGB && 
+				fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
 				return fmt;
 		}
 		return formats[0];
+	}
+
+	VulkanImage* VulkanSwapchain::getImageWrapper(uint32_t index)
+	{
+		if (index >= m_frames.size()) {
+			spdlog::error("VulkanSwapchain: Attempted to access image index {} out of bounds ({})", index, m_frames.size());
+			return nullptr;
+		}
+		return m_frames[index].image.get();
 	}
 }

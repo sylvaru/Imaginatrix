@@ -4,6 +4,25 @@ project(ix_external)
 
 find_package(Vulkan REQUIRED)
 
+
+# ==========================================================
+# Add vulkan interface target
+# ==========================================================
+add_library(vulkan_i INTERFACE)
+
+target_link_libraries(vulkan_i INTERFACE
+    Vulkan::Vulkan
+)
+
+# ==========================================================
+# Vulkan Memory Allocator (VMA)
+# ==========================================================
+add_library(vma INTERFACE)
+
+target_include_directories(vma INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/VMA/include"
+)
+
 # ==========================================================
 # spdlog (Logging)
 # ==========================================================
@@ -57,11 +76,3 @@ add_library(entt INTERFACE)
 target_include_directories(entt INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/entt/src")
 
 
-# ==========================================================
-# Add vulkan interface target
-# ==========================================================
-add_library(vulkan_i INTERFACE)
-
-target_link_libraries(vulkan_i INTERFACE
-    Vulkan::Vulkan
-)

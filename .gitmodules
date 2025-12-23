@@ -22,3 +22,6 @@
 [submodule "ix_external/entt"]
 	path = ix_external/entt
 	url = https://github.com/skypjack/entt.git
+[submodule "ix_external/VMA"]
+	path = ix_external/VMA
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git

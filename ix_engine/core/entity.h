@@ -6,7 +6,8 @@ namespace ix
 {
     class Scene;
 
-    class Entity {
+    class Entity 
+    {
     public:
         Entity() = default;
         Entity(entt::entity handle, Scene* scene) : m_entityHandle(handle), m_scene(scene) {}

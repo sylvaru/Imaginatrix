@@ -1,0 +1,36 @@
+// vk_render_graph.h
+#pragma once
+#include "render_graph_pass_i.h"
+#include "vk_render_graph_registry.h"
+#include "vk_render_graph_builder.h"
+#include <memory>
+#include <vector>
+
+namespace ix 
+{
+    struct PassEntry 
+    {
+        std::unique_ptr<RenderGraphPass_I> pass;
+        std::vector<ResourceRequest> requests;
+    };
+
+    class RenderGraph 
+    {
+    public:
+        void addPass(std::unique_ptr<RenderGraphPass_I> pass);
+        void compile();
+        void execute(const FrameContext& ctx);
+
+        // Helper to get swapchain into the graph
+        void importImage(const std::string& name, VulkanImage* image);
+        void clearExternalResources() {
+            m_registry.clearExternalResources();
+        }
+
+    private:
+        void transitionResource(VkCommandBuffer cmd, const ResourceRequest& request);
+
+        RenderGraphRegistry m_registry;
+        std::vector<PassEntry> m_compiledPasses;
+    };
+}

@@ -8,6 +8,8 @@
 namespace ix 
 { 
     class Scene; 
+    struct FrameContext;
+    class VulkanSwapchain;
 }
 
 namespace ix {
@@ -19,6 +21,11 @@ namespace ix {
         uint32_t triangleCount = 0;
     };
 
+    struct RenderExtent {
+        uint32_t width;
+        uint32_t height;
+    };
+
     struct Window_I;
 
     class Renderer_I {
@@ -28,18 +35,23 @@ namespace ix {
         // Lifecycle
         virtual void init() = 0;
         virtual void shutdown() = 0;
+        virtual void* getAPIContext() = 0;
+        virtual void waitIdle() {}
 
         // Window resizing
         virtual void onResize(uint32_t width, uint32_t height) = 0;
 
         // The Frame Cycle
-        virtual void beginFrame() = 0;
-        virtual void endFrame() = 0;
+        virtual bool beginFrame(FrameContext& ctx) = 0;
+        virtual void endFrame(const FrameContext& ctx) = 0;
 
         // The Engine passes the entire scene, and the renderer queries the Registry
-        virtual void submitScene(Scene& scene, float alpha) = 0;
+        virtual void render(const FrameContext& ctx) = 0;
 
         virtual void loadPipelines(const nlohmann::json& json) {}
+        virtual RenderExtent getSwapchainExtent() const = 0;
+        virtual VulkanSwapchain* getSwapchain() = 0;
+        virtual uint32_t getCurrentImageIndex() const = 0;
 
     };
 }

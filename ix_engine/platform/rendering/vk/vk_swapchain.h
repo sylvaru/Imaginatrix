@@ -7,17 +7,16 @@ namespace ix
 {
     class VulkanImage;
     class VulkanContext;
-}
 
-namespace ix
-{
 
-    struct SwapchainImage {
+    struct SwapchainImage 
+    {
         std::unique_ptr<VulkanImage> image;
         VkSemaphore renderFinishedSemaphore;
     };
 
-    class VulkanSwapchain {
+    class VulkanSwapchain 
+    {
     public:
         VulkanSwapchain(VulkanContext& context, VkExtent2D extent, VulkanSwapchain* old = nullptr);
         ~VulkanSwapchain();
@@ -32,7 +31,7 @@ namespace ix
         VkExtent2D getExtent() const { return m_extent; }
         uint32_t getImageCount() const { return static_cast<uint32_t>(m_images.size()); }
         VkImage getImage(uint32_t index) const { return m_images[index]; }
-        VulkanImage* getImageWrapper(uint32_t index) { return m_frames[index].image.get(); }
+        VulkanImage* getImageWrapper(uint32_t index);
         VkSemaphore getRenderSemaphore(uint32_t index) { return m_frames[index].renderFinishedSemaphore; }
 
         // Misc

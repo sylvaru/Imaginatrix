@@ -1,6 +1,7 @@
 // engine.cpp
 #include "common/engine_pch.h"
 #include "engine.h"
+#include "global_common/ix_gpu_types.h"
 #include "core/scene_manager.h"
 #include "platform/rendering/rendering_api.h"
 #include "platform/glfw_platform.h"
@@ -19,14 +20,11 @@ namespace ix
 	{
 		if (s_instance) { spdlog::error("Engine instance alredy exists!"); }
 		s_instance = this;
+
 		m_renderer = createRenderer(m_window, spec.api);
 	}
 
-	Engine::~Engine()
-	{
-		SceneManager::shutdown();
-		s_instance = nullptr;
-	}
+	Engine::~Engine() { shutdown();	}
 
 	void Engine::init()
 	{
@@ -34,13 +32,21 @@ namespace ix
 
 		m_window.lockCursor(m_cursorLocked);
 		setupInputCallbacks();
-		
+
 		// Init core systems
 		m_renderer->init();
+
+		auto* vkContext = static_cast <VulkanContext*>(m_renderer->getAPIContext());
+		if (!vkContext) {
+			spdlog::critical("Engine: Renderer failed to provide a valid Vulkan Context!");
+			return;
+		}
+		AssetManager::get().init(vkContext);
+
 		SceneManager::init();
 	}
 
-	void Engine::run() 
+	void Engine::run()
 	{
 		spdlog::info("ix::Engine::run() ... ");
 
@@ -74,26 +80,43 @@ namespace ix
 
 				accumulator -= dt;
 			}
-			m_renderer->beginFrame();
+			auto extent = m_renderer->getSwapchainExtent();
+			float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+			auto activeCameraMatrices = SceneManager::getActiveCameraMatrices(aspect);
 
-			float alpha = static_cast<float>(accumulator / dt);
-			for (auto& layer : m_layers) {
-				layer->onUpdate(static_cast<float>(frameTime));
+			FrameContext ctx;
+			ctx.deltaTime = static_cast<float>(frameTime);
+			//ctx.totalTime = /* tracked total time */;
+			ctx.viewMatrix = activeCameraMatrices.getView();
+			ctx.projectionMatrix = activeCameraMatrices.getProj();
+			ctx.assetManager = &AssetManager::get();
+
+
+			if (m_renderer->beginFrame(ctx)) 
+			{ 
+
+				float alpha = static_cast<float>(accumulator / dt);
+				for (auto& layer : m_layers) {
+					layer->onUpdate(static_cast<float>(frameTime));
+				}
+
+				m_renderer->render(ctx);
+
+				for (auto& layer : m_layers) {
+					layer->onRender(alpha);
+				}
+
+				m_renderer->endFrame(ctx);
 			}
-
-			for (auto& layer : m_layers) {
-				layer->onRender(alpha);
-			}
-
-			m_renderer->endFrame();
-	
+			
 		}
 	}
 
 	void Engine::setupInputCallbacks()
 	{
 		m_window.setKeyCallback([this](IxKey key, int scacode, KeyAction action, int mods) {
-			if (key == IxKey::LEFT_ALT && action == KeyAction::PRESS) {
+			if (key == IxKey::LEFT_ALT && action == KeyAction::PRESS) 
+			{
 				toggleCursorLock();
 			}
 			});
@@ -111,6 +134,16 @@ namespace ix
 	{
 		m_cursorLocked = !m_cursorLocked;
 		m_window.lockCursor(m_cursorLocked);
+	}
+
+	void Engine::shutdown()
+	{
+		if (m_renderer) m_renderer->waitIdle(); // wait for gpu to finish work
+		m_layers.clear();
+		SceneManager::shutdown();
+		AssetManager::get().clearAssetCache();
+		if (m_renderer)	m_renderer->shutdown();
+		s_instance = nullptr;
 	}
 	
 }

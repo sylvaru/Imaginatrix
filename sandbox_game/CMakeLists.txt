@@ -27,8 +27,5 @@ target_link_libraries(sandbox_game
     PRIVATE
 		ix_interface
         ix_engine
-        glm
-        nlohmann_json::nlohmann_json
-        spdlog::spdlog_header_only
 )
 
