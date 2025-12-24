@@ -17,7 +17,8 @@ namespace ix
         size_t operator() (const PipelineState& s) const;
     };
 
-    struct PipelineDefinition {
+    struct PipelineDefinition 
+    {
         std::string name;
         std::string vertPath;
         std::string fragPath;
@@ -25,7 +26,8 @@ namespace ix
         VkPipelineLayout layout;
     };
 
-    class VulkanPipelineManager {
+    class VulkanPipelineManager 
+    {
     public:
         VulkanPipelineManager(VulkanContext& context);
         ~VulkanPipelineManager();
@@ -38,7 +40,7 @@ namespace ix
             VkPipelineLayout layout);
 
         void reloadPipelines();
-
+        void trackLayout(VkPipelineLayout layout) { m_createdLayouts.push_back(layout); }
         void clearCache();
 
         // Getters
@@ -50,6 +52,7 @@ namespace ix
         VulkanPipeline* bakePipeline(const PipelineDefinition& def);
 
         VulkanContext& m_context;
+        std::vector<VkPipelineLayout> m_createdLayouts;
         std::vector<PipelineDefinition> m_definitions;
         std::unordered_map<PipelineState, std::shared_ptr<VulkanPipeline>, PipelineHasher> m_stateCache; // Pipeline state cache
         std::unordered_map<std::string, std::shared_ptr<VulkanPipeline>> m_namedCache; // Pipeline name cache

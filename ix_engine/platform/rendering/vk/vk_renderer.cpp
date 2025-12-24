@@ -19,10 +19,12 @@ namespace ix
 		, m_instance(std::make_unique<VulkanInstance>("Imaginatrix Engine"))
 		, m_context(std::make_unique<VulkanContext>(*m_instance, m_window))
 		, m_pipelineManager(std::make_unique<VulkanPipelineManager>(*m_context))
-		, m_descriptorManager(std::make_unique<VulkanDescriptorManager>(*m_context))
 		, m_renderGraph(std::make_unique<RenderGraph>())
 	{
-
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+		{
+			m_descriptorManagers.push_back(std::make_unique<VulkanDescriptorManager>(*m_context));
+		}
 	}
 	VulkanRenderer::~VulkanRenderer() { shutdown(); }
 
@@ -72,7 +74,7 @@ namespace ix
 			m_swapchain.get()
 		);
 	
-		// Set the new one as current
+		// Set the new swapchain as current
 		m_swapchain = std::move(newSwapchain);
 
 		m_context->setSwapchainFormat(m_swapchain->getFormat());
@@ -87,7 +89,8 @@ namespace ix
 
 		m_pipelineManager->reloadPipelines();
 
-		if (m_renderGraph) {
+		if (m_renderGraph) 
+		{
 			m_renderGraph->clearExternalResources();
 
 			uint32_t startIdx = 0;
@@ -105,6 +108,10 @@ namespace ix
 
 		vkWaitForFences(m_context->device(), 1, &frame.inFlightFence, VK_TRUE, UINT64_MAX);
 
+		// Reset this frames pools
+		auto& dynamicDescriptorManager = m_descriptorManagers[m_currentFrameIndex];
+		dynamicDescriptorManager->resetPools();
+
 		uint32_t imageIndex;
 		VkResult result = m_swapchain->acquireNextImage(frame.imageAvailableSemapohore, &imageIndex);
 
@@ -118,21 +125,14 @@ namespace ix
 
 		m_currentImageIndex = imageIndex;
 
-		ctx.commandBuffer = frame.commandBuffer;
-		ctx.frameIndex = m_currentFrameIndex;
-		ctx.pipelineManager = m_pipelineManager.get();
-
 
 		// Reset Fence & Command Buffer for recording
 		vkResetFences(m_context->device(), 1, &frame.inFlightFence);
 		vkResetCommandBuffer(frame.commandBuffer, 0);
 
-
-		updateGlobalUbo(ctx);
-
 		// Descriptor Management
 		VkDescriptorSet globalSet;
-		if (!m_descriptorManager->allocate(&globalSet, m_globalDescriptorLayout)) {
+		if (!dynamicDescriptorManager->allocate(&globalSet, m_globalDescriptorLayout)) {
 			spdlog::error("VulkanRenderer: Failed to allocate global descriptor set!");
 		}
 
@@ -142,20 +142,19 @@ namespace ix
 		writer.writeBuffer(0, &bufferInfo, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		writer.updateSet(*m_context, globalSet);
 
+		// Populate FrameContext
+		ctx.frameIndex = m_currentFrameIndex;
+		ctx.commandBuffer = frame.commandBuffer;
+		ctx.globalDescriptorSet = globalSet;
+		ctx.pipelineManager = m_pipelineManager.get();
+
+		updateGlobalUbo(ctx);
+
 		// Command Recording Start
 		VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS) {
 			throw std::runtime_error("failed to begin recording command buffer!");
 		}
-
-		// Initial Bindings
-		vkCmdBindDescriptorSets(
-			frame.commandBuffer,
-			VK_PIPELINE_BIND_POINT_GRAPHICS,
-			m_defaultLayout,
-			0, 1, &globalSet,
-			0, nullptr
-		);
 
 		return true;
 	}
@@ -212,9 +211,6 @@ namespace ix
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
 			recreateSwapchain();
 		}
-
-		// Reset the descriptor pools for the next time we use this frame index
-		m_descriptorManager->resetPools();
 
 		m_currentFrameIndex = (m_currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
@@ -277,10 +273,8 @@ namespace ix
 	}
 
 
-
 	void VulkanRenderer::loadPipelines(const nlohmann::json& json)
 	{
-
 		std::string shaderRoot = std::string(PROJECT_ROOT_DIR) + "/sandbox_game/res/shaders/spirV/";
 
 		for (const auto& entry : json["pipelines"]) {
@@ -288,7 +282,7 @@ namespace ix
 
 			// Map JSON state to Vulkan Enums
 			state.topology = (entry["state"]["topology"] == "triangle_list") ?
-				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 			state.polygonMode = (entry["state"]["polygonMode"] == "line") ?
 				VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
@@ -296,25 +290,63 @@ namespace ix
 			state.cullMode = (entry["state"]["cullMode"] == "back") ?
 				VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
 
+			state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
 			state.depthTest = entry["state"]["depthTest"].get<bool>() ? VK_TRUE : VK_FALSE;
 			state.depthWrite = entry["state"]["depthWrite"].get<bool>() ? VK_TRUE : VK_FALSE;
+			state.depthCompareOp = VK_COMPARE_OP_LESS;
 
 			state.colorAttachmentFormats = { m_swapchain->getFormat() };
-			state.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+			state.depthAttachmentFormat = m_context->getDepthFormat();
+
+			// Build Pipeline Layout from JSON
+			VkPipelineLayout currentLayout = m_defaultLayout;
+
+			if (entry.contains("layout")) {
+				auto& layoutJson = entry["layout"];
+
+				std::vector<VkPushConstantRange> pushConstants;
+				if (layoutJson.contains("pushConstants")) {
+					for (const auto& pc : layoutJson["pushConstants"]) {
+						VkPushConstantRange range{};
+						range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+						range.offset = pc.value("offset", 0);
+						range.size = pc.value("size", 64);
+						pushConstants.push_back(range);
+					}
+				}
+
+				VkDescriptorSetLayout set0Layout = m_globalDescriptorLayout;
+
+				VkPipelineLayoutCreateInfo layoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+				layoutCI.setLayoutCount = 1;
+				layoutCI.pSetLayouts = &set0Layout;
+				layoutCI.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size());
+				layoutCI.pPushConstantRanges = pushConstants.data();
+
+				if (vkCreatePipelineLayout(m_context->device(), &layoutCI, nullptr, &currentLayout) != VK_SUCCESS) 
+				{
+					spdlog::error("Failed to create layout for pipeline {}", entry["name"].get<std::string>());
+					continue;
+				}
+				else
+				{
+					m_pipelineManager->trackLayout(currentLayout);
+				}
+			}
 
 			std::string vertPath = shaderRoot + entry["vert"].get<std::string>();
 			std::string fragPath = shaderRoot + entry["frag"].get<std::string>();
 
 			m_pipelineManager->createGraphicsPipeline(
-				entry["name"],
+				entry["name"].get<std::string>(),
 				vertPath,
 				fragPath,
 				state,
-				m_defaultLayout
+				currentLayout
 			);
 
-			spdlog::info("VulkanRenderer: Created pipeline '{}' using shaders from {}",
-				entry["name"].get<std::string>(), shaderRoot);
+			spdlog::info("VulkanRenderer: Created pipeline '{}'", entry["name"].get<std::string>());
 		}
 	}
 
@@ -373,7 +405,7 @@ namespace ix
 			m_renderGraph.reset();
 		}
 		m_depthImage.reset();
-		m_descriptorManager.reset();
+		m_descriptorManagers.clear();
 
 		m_globalUboBuffers.clear();
 

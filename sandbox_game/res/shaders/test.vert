@@ -1,20 +1,28 @@
 #version 450
-#extension GL_KHR_vulkan_glsl : enable
-layout(location = 0) out vec3 fragColor;
 
-vec2 positions[3] = vec2[](
-    vec2(0.0, -0.5),
-    vec2(0.5, 0.5),
-    vec2(-0.5, 0.5)
-);
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec2 inTexCoord;
+layout(location = 3) in vec4 inColor;
 
-vec3 colors[3] = vec3[](
-    vec3(1.0, 0.0, 0.0),
-    vec3(0.0, 1.0, 0.0),
-    vec3(0.0, 0.0, 1.0)
-);
+layout(location = 0) out vec2 fragUV;
+
+layout(set = 0, binding = 0) uniform GlobalUbo {
+    mat4 projection;
+    mat4 view;
+    vec4 cameraPos;
+    float time;
+    float deltaTime;
+} ubo;
+
+layout(push_constant) uniform Push {
+    mat4 modelMatrix;
+} push;
 
 void main() {
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-    fragColor = colors[gl_VertexIndex];
+    // Standard MVP transformation
+    gl_Position = ubo.projection * ubo.view * push.modelMatrix * vec4(inPosition, 1.0);
+    
+    // Passing color through (or you can use normals for basic lighting later)
+    fragUV = inTexCoord;
 }

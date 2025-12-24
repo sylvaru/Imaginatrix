@@ -18,9 +18,8 @@ namespace ix
 		, m_window(*m_platform)
 		, m_input(*m_platform)
 	{
-		if (s_instance) { spdlog::error("Engine instance alredy exists!"); }
+		if (s_instance) { spdlog::error("Engine instance already exists!"); }
 		s_instance = this;
-
 		m_renderer = createRenderer(m_window, spec.api);
 	}
 
@@ -37,12 +36,7 @@ namespace ix
 		m_renderer->init();
 
 		auto* vkContext = static_cast <VulkanContext*>(m_renderer->getAPIContext());
-		if (!vkContext) {
-			spdlog::critical("Engine: Renderer failed to provide a valid Vulkan Context!");
-			return;
-		}
 		AssetManager::get().init(vkContext);
-
 		SceneManager::init();
 	}
 
@@ -89,6 +83,7 @@ namespace ix
 			//ctx.totalTime = /* tracked total time */;
 			ctx.viewMatrix = activeCameraMatrices.getView();
 			ctx.projectionMatrix = activeCameraMatrices.getProj();
+			ctx.cameraPosition = activeCameraMatrices.getPos();
 			ctx.assetManager = &AssetManager::get();
 
 

@@ -41,7 +41,7 @@ namespace ix
 		static Engine& get() { return *s_instance; }
 		static AssetManager& getAssetManager() { return AssetManager::get(); }
 		Renderer_I& getRenderer() { return *m_renderer; }
-	
+		Input_I& getInput() { return m_input; }
 
 		void setupInputCallbacks();
 		void processInput();

@@ -1,11 +1,11 @@
 // game_layer.cpp
 #include "common/game_pch.h"
 #include "game_layer.h"
-#include "core/scene_manager.h"
-#include "core/scene.h"
 #include "engine.h"
+#include "core/scene_manager.h"
 #include "core/components.h"
-#include <spdlog/spdlog.h>
+
+
 
 using namespace ix;
 void GameLayer::onAttach()
@@ -32,7 +32,8 @@ void GameLayer::onAttach()
 
 void GameLayer::onFixedUpdate(float fixedDt) 
 {
-
+    auto& input = Engine::get().getInput();
+    SceneManager::getActiveScene().update(fixedDt, input);
 }
 
 void GameLayer::onRender(float alpha) 

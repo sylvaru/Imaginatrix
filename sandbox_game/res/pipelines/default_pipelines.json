@@ -4,12 +4,31 @@
             "name": "test",
             "vert": "test.vert.spv",
             "frag": "test.frag.spv",
+            "layout": {
+                "pushConstants": [
+                    {
+                        "stage": "vertex",
+                        "offset": 0,
+                        "size": 64
+                    }
+                ],
+                "bindings": [
+                    {
+                        "set": 0,
+                        "binding": 0,
+                        "type": "uniform_buffer",
+                        "stage": "vertex"
+                    }
+                ]
+            },
             "state": {
                 "topology": "triangle_list",
                 "polygonMode": "fill",
                 "cullMode": "back",
+                "frontFace": "clockwise",
                 "depthTest": true,
-                "depthWrite": true
+                "depthWrite": true,
+                "vertexInput": "standard_3d"
             }
         }
     ]

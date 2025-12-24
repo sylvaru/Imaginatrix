@@ -12,19 +12,20 @@ namespace ix
 	size_t PipelineHasher::operator() (const PipelineState& s) const
 	{
 		size_t seed{};
-		auto hash_combine = [&seed](size_t v)
-			{
-				seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		auto hash_combine = [&seed](size_t v) {
+			seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 			};
 
 		hash_combine(static_cast<size_t>(s.topology));
 		hash_combine(static_cast<size_t>(s.polygonMode));
 		hash_combine(static_cast<size_t>(s.cullMode));
+		hash_combine(static_cast<size_t>(s.frontFace));
 		hash_combine(static_cast<size_t>(s.depthTest));
+		hash_combine(static_cast<size_t>(s.depthWrite));
+		hash_combine(static_cast<size_t>(s.depthCompareOp));
 		hash_combine(static_cast<size_t>(s.depthAttachmentFormat));
 
-		for (const auto& format : s.colorAttachmentFormats)
-		{
+		for (const auto& format : s.colorAttachmentFormats) {
 			hash_combine(static_cast<size_t>(format));
 		}
 
@@ -118,7 +119,6 @@ namespace ix
 		m_stateCache.clear();
 		m_namedCache.clear();
 
-		// Use the helper so we don't trigger name-checks or re-registration
 		for (auto& def : m_definitions) {
 			bakePipeline(def);
 		}
@@ -130,7 +130,13 @@ namespace ix
 	{
 		m_stateCache.clear();
 		m_namedCache.clear();
+
+		for (auto layout : m_createdLayouts)
+		{
+			if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(m_context.device(), layout, nullptr);
+		}
 		m_definitions.clear();
+		m_createdLayouts.clear();
 	}
 
 }

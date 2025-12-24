@@ -125,7 +125,7 @@ namespace ix
 
 
     // Input API
-    static const std::unordered_map<IxKey, int> IX_TO_GLFW = 
+    static const std::unordered_map<IxKey, int> IX_TO_GLFW =
     {
         { IxKey::W, GLFW_KEY_W },
         { IxKey::A, GLFW_KEY_A },
@@ -133,10 +133,12 @@ namespace ix
         { IxKey::D, GLFW_KEY_D },
         { IxKey::E, GLFW_KEY_E },
         { IxKey::Q, GLFW_KEY_Q },
+        { IxKey::X, GLFW_KEY_X },
         { IxKey::ESCAPE, GLFW_KEY_ESCAPE },
         { IxKey::SPACE,  GLFW_KEY_SPACE },
-        { IxKey::LEFT_ALT, GLFW_KEY_SPACE },
-        { IxKey::LEFT_SHIFT, GLFW_KEY_LEFT_SHIFT }
+        { IxKey::LEFT_SHIFT, GLFW_KEY_LEFT_SHIFT },
+        { IxKey::LEFT_CONTROL, GLFW_KEY_LEFT_CONTROL },
+        { IxKey::LEFT_ALT, GLFW_KEY_LEFT_ALT }
     };
 
     int GlfwPlatform::toGlfwKey(IxKey key) const {
@@ -171,9 +173,9 @@ namespace ix
         m_firstMouse = true;
     }
 
-    bool GlfwPlatform::isKeyPressed(IxKey key) const 
+    bool GlfwPlatform::isKeyPressed(IxKey key) const
     {
-        int glfwKey = toGlfwKey(key);
+        int glfwKey = static_cast<int>(key);
         if (glfwKey < 0 || glfwKey >= 512) return false;
         return m_keyStates.test(glfwKey);
     }

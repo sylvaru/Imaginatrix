@@ -1,8 +1,28 @@
 {
     "entities": [
         {
+            "name": "MainCamera",
+            "transform": {
+                "pos": [ 0, 3, 15 ],
+                "rot": [ 0, 0, 0 ],
+                "scale": [ 1, 1, 1 ]
+            },
+            "camera": {
+                "fov": 75.0,
+                "primary": true
+            },
+            "controller": {
+                "speed": 8.0,
+                "sensitivity": 0.002
+            }
+        },
+        {
             "name": "TestPlane",
-            "transform": { "pos": [ 0, 0, -5 ] },
+            "transform": {
+                "pos": [ 0, 0, 0 ],
+                "rot": [ 0, 0, 0 ],
+                "scale": [ 2, 2, 2 ]
+            },
             "mesh": "plane.gltf"
         }
     ]

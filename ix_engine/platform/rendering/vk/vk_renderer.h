@@ -89,7 +89,7 @@ namespace ix
         int m_currentFrameIndex = 0;
 
         std::unique_ptr<VulkanPipelineManager> m_pipelineManager;
-        std::unique_ptr<VulkanDescriptorManager> m_descriptorManager;
+        std::vector<std::unique_ptr<VulkanDescriptorManager>> m_descriptorManagers;
         
         VkPipelineLayout m_defaultLayout;
         VkDescriptorSetLayout m_globalDescriptorLayout;

@@ -48,11 +48,46 @@ namespace ix
                 // Create Entity in the new scene
                 Entity entity = newScene->createEntity(name);
 
-                if (item.contains("transform")) 
+                if (item.contains("transform"))
                 {
                     auto& tc = entity.addComponent<TransformComponent>();
-                    auto pos = item["transform"]["pos"];
-                    tc.position = glm::vec3(pos[0], pos[1], pos[2]);
+                    auto& tJson = item["transform"];
+
+                    // Position
+                    if (tJson.contains("pos")) {
+                        auto p = tJson["pos"];
+                        tc.position = { p[0], p[1], p[2] };
+                    }
+
+                    // Rotation
+                    if (tJson.contains("rot")) {
+                        auto r = tJson["rot"];
+                        glm::vec3 eulerRadians = {
+                            glm::radians((float)r[0]),
+                            glm::radians((float)r[1]),
+                            glm::radians((float)r[2])
+                        };
+                        tc.rotation = glm::quat(eulerRadians);
+                    }
+
+                    // Scale
+                    if (tJson.contains("scale")) {
+                        auto s = tJson["scale"];
+                        tc.scale = { s[0], s[1], s[2] };
+                    }
+                }
+                if (item.contains("camera"))
+                {
+                    auto& cam = entity.addComponent<CameraComponent>();
+                    cam.fov = item["camera"].value("fov", 75.0f);
+                    cam.primary = item["camera"].value("primary", true);
+                }
+
+                if (item.contains("controller")) 
+                {
+                    auto& ctrl = entity.addComponent<CameraControlComponent>();
+                    ctrl.moveSpeed = item["controller"].value("speed", 5.0f);
+                    ctrl.lookSensitivity = item["controller"].value("sensitivity", 0.002f);
                 }
 
                 // Implicit Asset Loading

@@ -2,6 +2,7 @@
 #include "common/engine_pch.h"
 #include "vk_pipeline.h"
 #include "vk_context.h"
+#include "resource_types/vk_resource_types.h"
 
 namespace ix
 {
@@ -38,7 +39,14 @@ namespace ix
         renderingInfo.depthAttachmentFormat = state.depthAttachmentFormat;
 
         // Vertex Input
+        auto bindingDescriptions = Vertex::getBindingDescriptions();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
         VkPipelineVertexInputStateCreateInfo vertexInput{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+        vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(bindingDescriptions.size());
+        vertexInput.pVertexBindingDescriptions = bindingDescriptions.data();
+        vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+        vertexInput.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         // Input Assembly
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };

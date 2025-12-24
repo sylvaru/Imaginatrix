@@ -3,7 +3,8 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
-namespace ix {
+namespace ix 
+{
     class VulkanPipelineManager;
     class AssetManager;
 
@@ -25,6 +26,7 @@ namespace ix {
         glm::vec3 cameraPosition;
         uint32_t frameIndex;
         VkCommandBuffer commandBuffer;
+        VkDescriptorSet globalDescriptorSet;
         class AssetManager* assetManager;
         class VulkanPipelineManager* pipelineManager;
    

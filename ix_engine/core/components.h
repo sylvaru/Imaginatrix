@@ -17,21 +17,21 @@ namespace ix
     };
 
     // Transform data for the entity
-    struct TransformComponent {
+    struct TransformComponent 
+    {
         glm::vec3 position{ 0.0f, 0.0f, 0.0f };
-        glm::vec3 rotation{ 0.0f, 0.0f, 0.0f };
+        glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
         glm::vec3 scale{ 1.0f, 1.0f, 1.0f };
 
         TransformComponent() = default;
 
-        // Compute the model matrix
         glm::mat4 getTransform() const {
-            glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
-            m = glm::rotate(m, rotation.x, { 1, 0, 0 });
-            m = glm::rotate(m, rotation.y, { 0, 1, 0 });
-            m = glm::rotate(m, rotation.z, { 0, 0, 1 });
-            return glm::scale(m, scale);
+            return glm::translate(glm::mat4(1.0f), position) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
+
+        glm::vec3 getForward() const { return rotation * glm::vec3(0, 0, -1); }
+        glm::vec3 getRight()   const { return rotation * glm::vec3(1, 0, 0); }
+        glm::vec3 getUp()      const { return rotation * glm::vec3(0, 1, 0); }
     };
 
     // Tag component for the Scene hierarchy
@@ -48,5 +48,11 @@ namespace ix
         float nearPlane = 0.1f;
         float farPlane = 1000.0f;
         bool primary = true; // Flag to identify which camera to render from
+    };
+
+    struct CameraControlComponent
+    {
+        float moveSpeed = 5.0f;
+        float lookSensitivity = 0.1f;
     };
 }

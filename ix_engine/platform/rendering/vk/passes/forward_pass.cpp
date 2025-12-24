@@ -84,21 +84,27 @@ namespace ix
         pipelineState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         pipelineState.polygonMode = VK_POLYGON_MODE_FILL;
         pipelineState.cullMode = VK_CULL_MODE_BACK_BIT;
-        pipelineState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        pipelineState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         pipelineState.depthTest = VK_TRUE;
         pipelineState.depthWrite = VK_TRUE;
         pipelineState.depthCompareOp = VK_COMPARE_OP_LESS;
+        pipelineState.colorAttachmentFormats = { targetImage->getFormat() };
+        pipelineState.depthAttachmentFormat = depthImage->getFormat();
 
         auto* pipeline = ctx.pipelineManager->getGraphicsPipeline(pipelineState);
-        if (!pipeline) 
-        {
-            spdlog::critical("BLACK SCREEN DETECTED: Pipeline not found in cache after resize!");
-            return;
-        }
 
         if (pipeline) 
         {
             vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandle());
+
+            // Initial Bindings
+            vkCmdBindDescriptorSets(
+                ctx.commandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                pipeline->getLayout(),
+                0, 1, &ctx.globalDescriptorSet,
+                0, nullptr
+            );
 
             // Render loop
             scene.getRegistry().view<MeshComponent, TransformComponent>().each([&](auto entity, auto& meshComp, auto& transformComp) {
