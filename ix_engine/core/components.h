@@ -11,9 +11,11 @@ namespace ix
     struct MeshComponent 
     {
         AssetHandle meshHandle = 0;
+        TextureHandle textureHandle = 0;
 
         MeshComponent() = default;
         MeshComponent(AssetHandle handle) : meshHandle(handle) {}
+        MeshComponent(AssetHandle handle, TextureHandle tex) : meshHandle(handle), textureHandle(tex) {}
     };
 
     // Transform data for the entity

@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "global_common/ix_gpu_types.h"
+#include "global_common/ix_event_pods.h"
 #include "vk_buffer.h"
 
 namespace ix 
@@ -17,7 +18,6 @@ namespace ix
     class VulkanDescriptorManager;
     class RenderGraph;
     class VulkanImage;
-
 
     struct DrawCommand 
     {
@@ -57,7 +57,8 @@ namespace ix
 
         // Misc
         void updateGlobalUbo(const FrameContext& ctx);
-
+        void updateBindlessTextures(uint32_t slot, VkDescriptorImageInfo& imageInfo);
+        void updateBindlessTextures(const std::vector<BindlessUpdateRequest>& updates);
         // Getters
         void* getAPIContext() override { return m_context.get(); }
         FrameData& getCurrentFrame() { return m_frames[m_currentFrameIndex]; }
@@ -99,10 +100,12 @@ namespace ix
         GlobalUbo m_globalUboData{};
 
         std::unique_ptr<RenderGraph> m_renderGraph;
-
         std::unique_ptr<VulkanImage> m_depthImage;
 
-
+        // Persistent Bindless Resources
+        VkDescriptorPool m_bindlessPool = VK_NULL_HANDLE;
+        VkDescriptorSetLayout m_bindlessLayout = VK_NULL_HANDLE;
+        VkDescriptorSet m_bindlessDescriptorSet = VK_NULL_HANDLE;
 
 	};
 }

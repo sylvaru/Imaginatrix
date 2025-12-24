@@ -7,6 +7,7 @@ namespace ix
 {
     class VulkanPipelineManager;
     class AssetManager;
+    class VulkanDescriptorManager;
 
     struct GlobalUbo 
     {
@@ -27,8 +28,10 @@ namespace ix
         uint32_t frameIndex;
         VkCommandBuffer commandBuffer;
         VkDescriptorSet globalDescriptorSet;
+        VkDescriptorSet bindlessDescriptorSet;
         class AssetManager* assetManager;
         class VulkanPipelineManager* pipelineManager;
+        class VulkanDescriptorManager* descriptorManager;
    
     };
 }

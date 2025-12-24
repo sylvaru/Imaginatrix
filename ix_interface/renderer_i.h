@@ -44,8 +44,6 @@ namespace ix {
         // The Frame Cycle
         virtual bool beginFrame(FrameContext& ctx) = 0;
         virtual void endFrame(const FrameContext& ctx) = 0;
-
-        // The Engine passes the entire scene, and the renderer queries the Registry
         virtual void render(const FrameContext& ctx) = 0;
 
         virtual void loadPipelines(const nlohmann::json& json) {}

@@ -32,6 +32,10 @@ namespace ix
         // Resetting at frame start
         void resetPools();
 
+        VkDescriptorPool createBindlessPool(uint32_t maxSets, uint32_t descriptorCount);
+
+        bool allocateBindless(VkDescriptorPool pool, VkDescriptorSet* set, VkDescriptorSetLayout layout, uint32_t descriptorCount);
+
     private:
         VkDescriptorPool getPool();
         VkDescriptorPool createPool(int count, PoolSizes sizes);
@@ -48,7 +52,7 @@ namespace ix
     {
     public:
         void writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type);
-        void writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type);
+        void writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement = 0);
 
         void updateSet(VulkanContext& context, VkDescriptorSet set);
 

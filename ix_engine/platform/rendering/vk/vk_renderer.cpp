@@ -11,6 +11,7 @@
 #include "platform/rendering/vk/render_graph/vk_render_graph.h"
 #include "platform/rendering/vk/passes/forward_pass.h"
 #include "window_i.h"
+#include "core/asset_manager.h"
 
 namespace ix
 {
@@ -25,6 +26,7 @@ namespace ix
 		{
 			m_descriptorManagers.push_back(std::make_unique<VulkanDescriptorManager>(*m_context));
 		}
+
 	}
 	VulkanRenderer::~VulkanRenderer() { shutdown(); }
 
@@ -34,6 +36,8 @@ namespace ix
 		createSyncObjects();
 		createCommandBuffers();
 		createGlobalLayout();
+
+		m_pipelineManager->setDefaultLayout(m_defaultLayout);
 
 		m_globalUboBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 		for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -46,6 +50,9 @@ namespace ix
 				VMA_MEMORY_USAGE_CPU_TO_GPU);
 			m_globalUboBuffers[i]->map();
 		}
+
+		m_bindlessPool = m_descriptorManagers[0]->createBindlessPool(1, 1000);
+		m_descriptorManagers[0]->allocateBindless(m_bindlessPool, &m_bindlessDescriptorSet, m_bindlessLayout, 1000);
 
 		// Setup passes for graph
 		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
@@ -87,7 +94,6 @@ namespace ix
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 		);
 
-		m_pipelineManager->reloadPipelines();
 
 		if (m_renderGraph) 
 		{
@@ -146,7 +152,9 @@ namespace ix
 		ctx.frameIndex = m_currentFrameIndex;
 		ctx.commandBuffer = frame.commandBuffer;
 		ctx.globalDescriptorSet = globalSet;
+		ctx.bindlessDescriptorSet = m_bindlessDescriptorSet;
 		ctx.pipelineManager = m_pipelineManager.get();
+		ctx.descriptorManager = m_descriptorManagers[m_currentFrameIndex].get();
 
 		updateGlobalUbo(ctx);
 
@@ -161,11 +169,14 @@ namespace ix
 
 	void VulkanRenderer::render(const FrameContext& ctx)
 	{
+		updateBindlessTextures(AssetManager::get().takePendingUpdates());
+
 		VulkanImage* currentImg = m_swapchain->getImageWrapper(m_currentImageIndex);
 		if (currentImg) {
 			m_renderGraph->importImage("BackBuffer", currentImg);
 			m_renderGraph->importImage("DepthBuffer", m_depthImage.get());
 		}
+
 		m_renderGraph->execute(ctx);
 	}
 
@@ -241,6 +252,36 @@ namespace ix
 		m_globalUboBuffers[m_currentFrameIndex]->writeToBuffer(&m_globalUboData);
 	}
 
+	void VulkanRenderer::updateBindlessTextures(const std::vector<BindlessUpdateRequest>& updates)
+	{
+		if (updates.empty()) return;
+
+		DescriptorWriter writer;
+		std::vector<VkDescriptorImageInfo> infoBatch;
+		infoBatch.reserve(updates.size());
+
+		for (const auto& req : updates)
+		{
+			infoBatch.push_back(req.info);
+			writer.writeImage(
+				0,
+				&infoBatch.back(),
+				1,
+				VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				req.slot
+			);
+		}
+
+		writer.updateSet(*m_context, m_bindlessDescriptorSet);
+	}
+
+	void VulkanRenderer::updateBindlessTextures(uint32_t slot, VkDescriptorImageInfo& imageInfo)
+	{
+		DescriptorWriter writer;
+		writer.writeImage(0, &imageInfo, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, slot);
+		writer.updateSet(*m_context, m_bindlessDescriptorSet);
+	}
+
 	void VulkanRenderer::createCommandBuffers() 
 	{
 		uint32_t graphicsFamily = m_context->getGraphicsFamily();
@@ -280,7 +321,7 @@ namespace ix
 		for (const auto& entry : json["pipelines"]) {
 			PipelineState state;
 
-			// Map JSON state to Vulkan Enums
+			// Map JSON State to Enums 
 			state.topology = (entry["state"]["topology"] == "triangle_list") ?
 				VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
@@ -291,50 +332,15 @@ namespace ix
 				VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
 
 			state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
-			state.depthTest = entry["state"]["depthTest"].get<bool>() ? VK_TRUE : VK_FALSE;
-			state.depthWrite = entry["state"]["depthWrite"].get<bool>() ? VK_TRUE : VK_FALSE;
+			state.depthTest = entry["state"].value("depthTest", true) ? VK_TRUE : VK_FALSE;
+			state.depthWrite = entry["state"].value("depthWrite", true) ? VK_TRUE : VK_FALSE;
 			state.depthCompareOp = VK_COMPARE_OP_LESS;
 
+			// Set formats from the current context
 			state.colorAttachmentFormats = { m_swapchain->getFormat() };
 			state.depthAttachmentFormat = m_context->getDepthFormat();
 
-			// Build Pipeline Layout from JSON
-			VkPipelineLayout currentLayout = m_defaultLayout;
-
-			if (entry.contains("layout")) {
-				auto& layoutJson = entry["layout"];
-
-				std::vector<VkPushConstantRange> pushConstants;
-				if (layoutJson.contains("pushConstants")) {
-					for (const auto& pc : layoutJson["pushConstants"]) {
-						VkPushConstantRange range{};
-						range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-						range.offset = pc.value("offset", 0);
-						range.size = pc.value("size", 64);
-						pushConstants.push_back(range);
-					}
-				}
-
-				VkDescriptorSetLayout set0Layout = m_globalDescriptorLayout;
-
-				VkPipelineLayoutCreateInfo layoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-				layoutCI.setLayoutCount = 1;
-				layoutCI.pSetLayouts = &set0Layout;
-				layoutCI.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size());
-				layoutCI.pPushConstantRanges = pushConstants.data();
-
-				if (vkCreatePipelineLayout(m_context->device(), &layoutCI, nullptr, &currentLayout) != VK_SUCCESS) 
-				{
-					spdlog::error("Failed to create layout for pipeline {}", entry["name"].get<std::string>());
-					continue;
-				}
-				else
-				{
-					m_pipelineManager->trackLayout(currentLayout);
-				}
-			}
-
+			// Create the Pipeline using Global Default Layout
 			std::string vertPath = shaderRoot + entry["vert"].get<std::string>();
 			std::string fragPath = shaderRoot + entry["frag"].get<std::string>();
 
@@ -343,40 +349,67 @@ namespace ix
 				vertPath,
 				fragPath,
 				state,
-				currentLayout
+				VK_NULL_HANDLE
 			);
 
-			spdlog::info("VulkanRenderer: Created pipeline '{}'", entry["name"].get<std::string>());
+			spdlog::info("VulkanRenderer: Created pipeline '{}' with global layout", entry["name"].get<std::string>());
 		}
 	}
 
-	void VulkanRenderer::createGlobalLayout() 
+	void VulkanRenderer::createGlobalLayout()
 	{
-		// Define the Binding for the Global UBO
+		// Set 0: Global UBO
 		VkDescriptorSetLayoutBinding globalUboBinding{};
 		globalUboBinding.binding = 0;
 		globalUboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 		globalUboBinding.descriptorCount = 1;
 		globalUboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		globalUboBinding.pImmutableSamplers = nullptr;
 
-		VkDescriptorSetLayoutCreateInfo descLayoutCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-		descLayoutCI.bindingCount = 1;
-		descLayoutCI.pBindings = &globalUboBinding;
+		VkDescriptorSetLayoutCreateInfo uboLayoutCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		uboLayoutCI.bindingCount = 1;
+		uboLayoutCI.pBindings = &globalUboBinding;
 
-		if (vkCreateDescriptorSetLayout(m_context->device(), &descLayoutCI, nullptr, &m_globalDescriptorLayout) != VK_SUCCESS) {
-			throw std::runtime_error("Failed to create descriptor set layout!");
+		if (vkCreateDescriptorSetLayout(m_context->device(), &uboLayoutCI, nullptr, &m_globalDescriptorLayout) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create UBO descriptor set layout!");
 		}
 
-		// Push Constants
+		// Set 1: Bindless Textures
+		VkDescriptorSetLayoutBinding bindlessBinding{};
+		bindlessBinding.binding = 0;
+		bindlessBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		bindlessBinding.descriptorCount = 1000; // Max textures
+		bindlessBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		// Flags for bindless
+		VkDescriptorBindingFlags flags =
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlags{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
+		bindingFlags.bindingCount = 1;
+		bindingFlags.pBindingFlags = &flags;
+
+		VkDescriptorSetLayoutCreateInfo bindlessLayoutCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+		bindlessLayoutCI.pNext = &bindingFlags;
+		bindlessLayoutCI.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+		bindlessLayoutCI.bindingCount = 1;
+		bindlessLayoutCI.pBindings = &bindlessBinding;
+
+		if (vkCreateDescriptorSetLayout(m_context->device(), &bindlessLayoutCI, nullptr, &m_bindlessLayout) != VK_SUCCESS) {
+			throw std::runtime_error("Failed to create bindless descriptor set layout!");
+		}
+
+		// Pipeline Layout
+		std::vector<VkDescriptorSetLayout> layouts = { m_globalDescriptorLayout, m_bindlessLayout };
+
 		VkPushConstantRange pushConstant{};
-		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		pushConstant.offset = 0;
-		pushConstant.size = sizeof(glm::mat4);
+		pushConstant.size = sizeof(glm::mat4) + sizeof(int); // Model Matrix + Texture Index
 
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-		pipelineLayoutCI.setLayoutCount = 1;
-		pipelineLayoutCI.pSetLayouts = &m_globalDescriptorLayout;
+		pipelineLayoutCI.setLayoutCount = static_cast<uint32_t>(layouts.size());
+		pipelineLayoutCI.pSetLayouts = layouts.data();
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstant;
 
@@ -384,6 +417,8 @@ namespace ix
 			throw std::runtime_error("Failed to create pipeline layout!");
 		}
 	}
+
+	
 
 	void VulkanRenderer::waitIdle()
 	{
@@ -406,8 +441,10 @@ namespace ix
 		}
 		m_depthImage.reset();
 		m_descriptorManagers.clear();
-
 		m_globalUboBuffers.clear();
+
+		if (m_bindlessPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(m_context->device(), m_bindlessPool, nullptr);
+		if (m_bindlessLayout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(m_context->device(), m_bindlessLayout, nullptr);
 
 		if (m_defaultLayout != VK_NULL_HANDLE) 
 		{

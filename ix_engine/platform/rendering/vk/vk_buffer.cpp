@@ -72,7 +72,7 @@ namespace ix
     void VulkanBuffer::uploadData(const void* data, VkDeviceSize size, VkDeviceSize offset) {
         if (size == VK_WHOLE_SIZE) size = m_bufferSize;
 
-        // Check if this buffer is actually CPU visible (e.g. VMA_MEMORY_USAGE_CPU_TO_GPU)
+        // Check if this buffer is actually CPU visible
         VmaAllocationInfo allocInfo;
         vmaGetAllocationInfo(m_allocator, m_allocation, &allocInfo);
 

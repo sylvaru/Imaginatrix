@@ -17,6 +17,7 @@ void GameLayer::onAttach()
     // Setup 
     SceneManager::setSceneRoot(resPath + "scenes/");
     AssetManager::get().setModelRoot(resPath + "models/");
+    AssetManager::get().setTextureRoot(resPath + "textures/");
 
     // Load Pipelines
     std::string pipelinePath = resPath + "pipelines/default_pipelines.json";
@@ -26,14 +27,13 @@ void GameLayer::onAttach()
         Engine::get().getRenderer().loadPipelines(pipelineData);
     }
 
-    // Load the actual level
+    // Load the level
     SceneManager::load("level1");
 }
 
 void GameLayer::onFixedUpdate(float fixedDt) 
 {
-    auto& input = Engine::get().getInput();
-    SceneManager::getActiveScene().update(fixedDt, input);
+    SceneManager::getActiveScene().update(fixedDt, Engine::get().getInput());
 }
 
 void GameLayer::onRender(float alpha) 

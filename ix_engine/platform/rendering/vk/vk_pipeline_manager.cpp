@@ -86,12 +86,13 @@ namespace ix
 		const PipelineState& state,
 		VkPipelineLayout layout)
 	{
+		VkPipelineLayout finalLayout = (layout == VK_NULL_HANDLE) ? m_defaultLayout : layout;
 		// Only add to definitions if it's actually new
 		auto it = std::find_if(m_definitions.begin(), m_definitions.end(),
 			[&](const PipelineDefinition& d) { return d.name == name; });
 
 		if (it == m_definitions.end()) {
-			m_definitions.push_back({ name, vertPath, fragPath, state, layout });
+			m_definitions.push_back({ name, vertPath, fragPath, state, finalLayout });
 		}
 
 		return bakePipeline(m_definitions.back());

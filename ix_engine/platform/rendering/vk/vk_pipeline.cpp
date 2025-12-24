@@ -111,7 +111,6 @@ namespace ix
             throw std::runtime_error("Failed to create modern graphics pipeline!");
         }
 
-        // Modules can be destroyed immediately after pipeline creation
         vkDestroyShaderModule(m_context.device(), vertModule, nullptr);
         vkDestroyShaderModule(m_context.device(), fragModule, nullptr);
     }

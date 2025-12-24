@@ -40,18 +40,20 @@ namespace ix
             VkPipelineLayout layout);
 
         void reloadPipelines();
-        void trackLayout(VkPipelineLayout layout) { m_createdLayouts.push_back(layout); }
         void clearCache();
 
-        // Getters
+        // Get / Set / Track
         VulkanPipeline* getGraphicsPipeline(PipelineState requestedState); // Get by state "Preffered"
         VulkanPipeline* getGraphicsPipeline(const std::string& name) const; // Get by name
+        void trackLayout(VkPipelineLayout layout) { m_createdLayouts.push_back(layout); }
+        void setDefaultLayout(VkPipelineLayout layout) { m_defaultLayout = layout; }
 
     private:
 
         VulkanPipeline* bakePipeline(const PipelineDefinition& def);
 
         VulkanContext& m_context;
+        VkPipelineLayout m_defaultLayout = VK_NULL_HANDLE;
         std::vector<VkPipelineLayout> m_createdLayouts;
         std::vector<PipelineDefinition> m_definitions;
         std::unordered_map<PipelineState, std::shared_ptr<VulkanPipeline>, PipelineHasher> m_stateCache; // Pipeline state cache

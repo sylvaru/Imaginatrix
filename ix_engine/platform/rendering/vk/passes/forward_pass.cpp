@@ -3,14 +3,9 @@
 #include "platform/rendering/vk/render_graph/vk_render_graph_builder.h"
 #include "platform/rendering/vk/render_graph/vk_render_graph_registry.h"
 #include "platform/rendering/vk/vk_pipeline_manager.h"
-#include "platform/rendering/vk/vk_pipeline.h"
-#include "platform/rendering/vk/vk_buffer.h"
-#include "platform/rendering/vk/vk_renderer.h"
-#include "platform/rendering/vk/vk_swapchain.h"
 #include "platform/rendering/vk/vk_image.h"
 
 #include "engine.h"
-#include "core/asset_manager.h"
 #include "core/scene_manager.h"
 #include "core/components.h"
 #include "global_common/ix_gpu_types.h"
@@ -97,12 +92,14 @@ namespace ix
         {
             vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandle());
 
-            // Initial Bindings
+            VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet };
+
             vkCmdBindDescriptorSets(
                 ctx.commandBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
                 pipeline->getLayout(),
-                0, 1, &ctx.globalDescriptorSet,
+                0, 2,
+                sets,
                 0, nullptr
             );
 
@@ -116,8 +113,22 @@ namespace ix
                 VkBuffer ivkBuf = mesh->indexBuffer->getBuffer();
 
                 // Push Constants
-                glm::mat4 model = transformComp.getTransform();
-                vkCmdPushConstants(ctx.commandBuffer, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
+                struct {
+                    glm::mat4 model;
+                    int textureIndex;
+                } pushData;
+
+                pushData.model = transformComp.getTransform();
+                pushData.textureIndex = 1;
+
+                vkCmdPushConstants(
+                    ctx.commandBuffer,
+                    layout,
+                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    0,
+                    sizeof(pushData),
+                    &pushData
+                );
 
                 // Bind and Draw
                 VkDeviceSize offsets[] = { 0 };

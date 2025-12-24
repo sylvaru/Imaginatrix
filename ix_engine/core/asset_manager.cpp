@@ -1,19 +1,38 @@
+#define TINYGLTF_NO_STB_IMAGE 
+#define TINYGLTF_NO_STB_IMAGE_WRITE
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "common/engine_pch.h"
 #include "asset_manager.h"
 #include "platform/rendering/vk/vk_context.h"
+#include "platform/rendering/vk/vk_image.h"
 #include "platform/rendering/vk/vk_buffer.h"
-#include <tiny_gltf.h>
 
+#include <tiny_gltf.h>
+#include <stb_image.h>
 
 namespace ix
 {
+    AssetManager::AssetManager() = default;
+    AssetManager::~AssetManager() = default;
 
     void AssetManager::init(VulkanContext* context) 
     {
         m_context = context;
+
+        // Default sampler for all textures
+        VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+        samplerInfo.magFilter = VK_FILTER_LINEAR;
+        samplerInfo.minFilter = VK_FILTER_LINEAR;
+        samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy = 16.0f;
+        vkCreateSampler(m_context->device(), &samplerInfo, nullptr, &m_defaultSampler);
+
+        // Missing Texture (Slot 0)
+        uint32_t magenta = 0xFFFF00FF;
+        loadTextureFromMemory("missing_tex", &magenta, 1, 1, VK_FORMAT_R8G8B8A8_SRGB);
         spdlog::info("AssetManager: Initialized with Context at {:p}", (void*)m_context);
     }
 
@@ -37,6 +56,7 @@ namespace ix
     {
         // Resolve the path using the root
         std::string fullPath = m_modelRoot + name;
+     
 
         // Prevent double loading (using the name as the key)
         if (m_pathMap.count(name)) {
@@ -47,7 +67,7 @@ namespace ix
         auto mesh = loadGLTF(fullPath);
 
         if (mesh) {
-            AssetHandle handle = m_nextHandle++;
+            AssetHandle handle = m_nextAssetHandle++;
 
             m_meshes[handle] = std::move(mesh);
             m_pathMap[name] = handle;
@@ -85,7 +105,6 @@ namespace ix
         bool success = false;
         if (osPath.extension() == ".glb") 
         {
-            // Binary is usually less picky about paths, but we'll stick to File for it
             success = loader.LoadBinaryFromFile(&model, &err, &warn, path);
         }
         else 
@@ -189,6 +208,111 @@ namespace ix
         return gpuMesh;
     }
 
+    TextureHandle AssetManager::loadTexture(const std::string& path, bool isHDR) 
+    {
+        if (m_pathMap.count(path)) return m_pathMap[path];
+
+        std::string fullPath = m_texRoot + path;
+
+        int width, height, channels;
+        void* pixels = nullptr;
+        VkFormat format;
+
+        if (isHDR) {
+            pixels = stbi_loadf(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+            format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        }
+        else {
+            pixels = stbi_load(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+            format = VK_FORMAT_R8G8B8A8_SRGB;
+        }
+
+        if (!pixels) {
+            spdlog::error("AssetManager: Failed to load {}", fullPath);
+            return 0; // Returns slot 0 (magenta)
+        }
+
+        auto image = std::make_unique<VulkanImage>(*m_context, VkExtent2D{ (uint32_t)width, (uint32_t)height }, format,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+
+        uint32_t pixelSize = isHDR ? 16 : 4;
+        image->uploadData(pixels, width * height * pixelSize);
+
+        stbi_image_free(pixels);
+
+        TextureHandle handle = m_nextAssetHandle++;
+        uint32_t slot = m_nextTextureSlot++;
+
+        m_textures[handle] = std::move(image);
+        m_textureToBindlessSlot[handle] = slot;
+        m_pathMap[fullPath] = handle;
+
+        // Queue for the Renderer to update the Descriptor Set
+        BindlessUpdateRequest req;
+        req.slot = slot;
+        req.info = m_textures[handle]->getDescriptorInfo(m_defaultSampler);
+
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_updateQueue.push(req);
+        }
+
+        return handle;
+    }
+
+    TextureHandle AssetManager::loadTextureFromMemory(const std::string& name, void* data, uint32_t width, uint32_t height, VkFormat format)
+    {
+        auto image = std::make_unique<VulkanImage>(
+            *m_context,
+            VkExtent2D{ width, height },
+            format,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        );
+
+        uint32_t bytesPerPixel = (format == VK_FORMAT_R32G32B32A32_SFLOAT) ? 16 : 4;
+        image->uploadData(data, width * height * bytesPerPixel);
+
+        TextureHandle handle = m_nextAssetHandle++;
+        uint32_t slot = m_nextTextureSlot++;
+
+        m_textures[handle] = std::move(image);
+        m_textureToBindlessSlot[handle] = slot;
+        m_pathMap[name] = handle;
+
+        // Push to Bindless Update Queue
+        BindlessUpdateRequest req;
+        req.slot = slot;
+        req.info = m_textures[handle]->getDescriptorInfo(m_defaultSampler);
+
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_updateQueue.push(req);
+        }
+
+        spdlog::debug("AssetManager: Registered '{}' to slot {}", name, slot);
+        return handle;
+    }
+
+    std::vector<BindlessUpdateRequest> AssetManager::takePendingUpdates()
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        std::vector<BindlessUpdateRequest> updates;
+
+        while (!m_updateQueue.empty()) {
+            updates.push_back(m_updateQueue.front());
+            m_updateQueue.pop();
+        }
+
+        return updates;
+    }
+
+
+    uint32_t AssetManager::getTextureBindlessIndex(TextureHandle handle)
+    {
+        auto it = m_textureToBindlessSlot.find(handle);
+        return (it != m_textureToBindlessSlot.end()) ? it->second : 0;
+    }
+
     VulkanMesh* AssetManager::getMesh(AssetHandle handle) 
     {
         if (handle == 0) return nullptr;
@@ -203,13 +327,31 @@ namespace ix
 
         return mesh;
     }
-    void AssetManager::clearAssetCache() 
+    void AssetManager::clearAssetCache()
     {
-        spdlog::info("AssetManager: Clearing asset cache and destroying GPU resources...");
-        m_meshes.clear();
-        m_pathMap.clear();
-        m_nextHandle = 1;
+        spdlog::info("AssetManager: Clearing asset cache...");
 
+        // Destroy all meshes
+        m_meshes.clear();
+
+        // Destroy all textures
+        m_textures.clear();
+
+        m_pathMap.clear();
+        m_textureToBindlessSlot.clear();
+
+        // Clear the queue
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        while (!m_updateQueue.empty()) m_updateQueue.pop();
+
+        // Destroy the sampler
+        if (m_defaultSampler != VK_NULL_HANDLE && m_context) {
+            vkDestroySampler(m_context->device(), m_defaultSampler, nullptr);
+            m_defaultSampler = VK_NULL_HANDLE;
+        }
+
+        m_nextAssetHandle = 1;
+        m_nextTextureSlot = 0;
         spdlog::info("AssetManager: GPU resources released.");
     }
 }

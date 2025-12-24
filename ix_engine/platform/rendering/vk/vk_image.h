@@ -9,6 +9,7 @@ typedef struct VmaAllocation_T* VmaAllocation;
 namespace ix 
 {
     class VulkanContext;
+    class VulkanBuffer;
 
     class VulkanImage 
     {
@@ -20,6 +21,8 @@ namespace ix
         ~VulkanImage();
 
         void transition(VkCommandBuffer cmd, VkImageLayout newLayout);
+        void copyFromBuffer(VkCommandBuffer cmd, VkBuffer buffer) const;
+        void uploadData(void* pixels, uint32_t size);
 
         // Getters
         VkImage getHandle() const { return m_handle; }
@@ -27,6 +30,9 @@ namespace ix
         VkFormat getFormat() const { return m_format; }
         VkExtent2D getExtent() const { return m_extent; }
         VkImageLayout getLayout() const { return m_currentLayout; }
+        VkDescriptorImageInfo getImageInfo(VkSampler sampler, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
+        VkDescriptorImageInfo getDescriptorInfo(VkSampler sampler) const;
+      
 
     private:
         void createView();

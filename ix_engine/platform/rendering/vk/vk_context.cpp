@@ -131,6 +131,9 @@ namespace ix {
         indexing.pNext = &features13;
         indexing.runtimeDescriptorArray = VK_TRUE;
         indexing.descriptorBindingPartiallyBound = VK_TRUE;
+        indexing.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+        indexing.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+      
 
         VkPhysicalDeviceFeatures2 deviceFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
         deviceFeatures.pNext = &indexing;

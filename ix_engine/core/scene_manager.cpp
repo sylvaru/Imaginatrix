@@ -97,8 +97,15 @@ namespace ix
 
                     AssetHandle handle = assetManager.loadModel(meshName);
 
-                    // Attach the component with the handle provided by AssetManager
-                    entity.addComponent<MeshComponent>(handle);
+                    TextureHandle texHandle = 0;
+
+                    if (item.contains("texture"))
+                    {
+                        std::string texPath = item["texture"];
+                        texHandle = assetManager.loadTexture(texPath, false);
+                    }
+
+                    entity.addComponent<MeshComponent>(handle, texHandle);
 
                     spdlog::info("SceneManager: Entity '{}' initialized with mesh '{}' (Handle: {})",
                         name, meshName, handle);

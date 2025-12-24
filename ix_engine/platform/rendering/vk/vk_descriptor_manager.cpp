@@ -66,6 +66,46 @@ namespace ix
         return result == VK_SUCCESS;
     }
 
+    bool VulkanDescriptorManager::allocateBindless(VkDescriptorPool pool, VkDescriptorSet* set, VkDescriptorSetLayout layout, uint32_t descriptorCount)
+    {
+        VkDescriptorSetAllocateInfo allocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        allocInfo.descriptorPool = pool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &layout;
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfo variableAllocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO };
+        variableAllocInfo.descriptorSetCount = 1;
+        variableAllocInfo.pDescriptorCounts = &descriptorCount;
+        allocInfo.pNext = &variableAllocInfo;
+
+        return vkAllocateDescriptorSets(m_context.device(), &allocInfo, set) == VK_SUCCESS;
+    }
+
+    VkDescriptorPool VulkanDescriptorManager::createBindlessPool(uint32_t maxSets, uint32_t descriptorCount)
+    {
+        std::vector<VkDescriptorPoolSize> poolSizes =
+        {
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount }
+        };
+
+        VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+        // This flag allows us to update the descriptors even after they are bound to a command buffer
+        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        poolInfo.maxSets = maxSets;
+        poolInfo.poolSizeCount = (uint32_t)poolSizes.size();
+        poolInfo.pPoolSizes = poolSizes.data();
+
+        VkDescriptorPool p;
+        if (vkCreateDescriptorPool(m_context.device(), &poolInfo, nullptr, &p) != VK_SUCCESS) {
+            throw std::runtime_error("Vulkan: Failed to create bindless descriptor pool");
+        }
+
+        // don't add this to m_usedPools because we don't want resetPools() to touch it.
+        // The AssetManager or a Global Resources class should own this lifetime.
+        return p;
+
+    }
+
     void VulkanDescriptorManager::resetPools() 
     {
         for (auto p : m_usedPools) {
@@ -77,7 +117,6 @@ namespace ix
     }
 
     // DescriptorWriter
-
     void DescriptorWriter::writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type) 
     {
         VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
@@ -93,4 +132,16 @@ namespace ix
         for (auto& w : m_writes) w.dstSet = set;
         vkUpdateDescriptorSets(context.device(), (uint32_t)m_writes.size(), m_writes.data(), 0, nullptr);
     }
+
+    void DescriptorWriter::writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement)
+    {
+        VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        write.dstBinding = binding;
+        write.dstArrayElement = arrayElement;
+        write.descriptorCount = count;
+        write.descriptorType = type;
+        write.pImageInfo = imageInfo;
+        m_writes.push_back(write);
+    }
+
 }
