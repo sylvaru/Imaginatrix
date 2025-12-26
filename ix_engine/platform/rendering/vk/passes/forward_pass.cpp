@@ -3,6 +3,7 @@
 #include "platform/rendering/vk/render_graph/vk_render_graph_builder.h"
 #include "platform/rendering/vk/render_graph/vk_render_graph_registry.h"
 #include "platform/rendering/vk/vk_pipeline_manager.h"
+#include "platform/rendering/vk/vk_context.h"
 #include "platform/rendering/vk/vk_image.h"
 
 #include "engine.h"
@@ -18,12 +19,14 @@ namespace ix
     void ForwardPass::setup(RenderGraphBuilder& builder) {
         builder.write("BackBuffer");
         builder.write("DepthBuffer");
+        m_cachedPipeline = builder.getPipelineManager()->getGraphicsPipeline("ForwardPass");
     }
 
-    void ForwardPass::execute(const FrameContext& ctx, RenderGraphRegistry& registry) 
+    void ForwardPass::execute(const FrameContext& ctx, RenderGraphRegistry& registry)
     {
-        auto& scene = SceneManager::getActiveScene();
+        if (!m_cachedPipeline) return;
 
+        auto& scene = SceneManager::getActiveScene();
         auto& colorState = registry.getResourceState("BackBuffer");
         auto& depthState = registry.getResourceState("DepthBuffer");
 
@@ -33,8 +36,8 @@ namespace ix
         if (!targetImage || !depthImage) return;
 
         VkExtent2D extent = targetImage->getExtent();
-       
-        // Color Attachment Setup
+
+        // Rendering Attachments
         VkRenderingAttachmentInfo colorAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
         colorAttachment.imageView = targetImage->getView();
         colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -42,13 +45,12 @@ namespace ix
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachment.clearValue = { {{ 0.1f, 0.1f, 0.1f, 1.0f }} };
 
-        // Depth Attachment Setup
         VkRenderingAttachmentInfo depthAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
         depthAttachment.imageView = depthImage->getView();
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
         depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        depthAttachment.clearValue.depthStencil = { 1.0f, 0 }; // Clear to far plane
+        depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
 
         VkRenderingInfo renderingInfo{ VK_STRUCTURE_TYPE_RENDERING_INFO };
         renderingInfo.renderArea = { {0, 0}, extent };
@@ -57,87 +59,54 @@ namespace ix
         renderingInfo.pColorAttachments = &colorAttachment;
         renderingInfo.pDepthAttachment = &depthAttachment;
 
-        // Start Dynamic Rendering
         vkCmdBeginRendering(ctx.commandBuffer, &renderingInfo);
 
-        // Set Dynamic State
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(extent.width);
-        viewport.height = static_cast<float>(extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+        VkViewport viewport{ 0.0f, 0.0f, (float)extent.width, (float)extent.height, 0.0f, 1.0f };
         vkCmdSetViewport(ctx.commandBuffer, 0, 1, &viewport);
-
         VkRect2D scissor{ {0, 0}, extent };
         vkCmdSetScissor(ctx.commandBuffer, 0, 1, &scissor);
 
+        vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
 
-        // Pipeline Setup
-        PipelineState pipelineState{};
-        pipelineState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        pipelineState.polygonMode = VK_POLYGON_MODE_FILL;
-        pipelineState.cullMode = VK_CULL_MODE_BACK_BIT;
-        pipelineState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        pipelineState.depthTest = VK_TRUE;
-        pipelineState.depthWrite = VK_TRUE;
-        pipelineState.depthCompareOp = VK_COMPARE_OP_LESS;
-        pipelineState.colorAttachmentFormats = { targetImage->getFormat() };
-        pipelineState.depthAttachmentFormat = depthImage->getFormat();
+        VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet };
+        vkCmdBindDescriptorSets(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_cachedPipeline->getLayout(), 0, 2, sets, 0, nullptr);
 
-        auto* pipeline = ctx.pipelineManager->getGraphicsPipeline(pipelineState);
+        // Render loop
+        scene.getRegistry().view<MeshComponent, TransformComponent>().each([&](auto entity, auto& meshComp, auto& transformComp) {
+            VulkanMesh* mesh = AssetManager::get().getMesh(meshComp.meshHandle);
+            if (!mesh) return;
 
-        if (pipeline) 
-        {
-            vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandle());
+            struct {
+                glm::mat4 model;
+                int textureIndex;
+            } pushData;
 
-            VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet };
+            pushData.model = transformComp.getTransform();
+            pushData.textureIndex = 3;
 
-            vkCmdBindDescriptorSets(
+            vkCmdPushConstants(
                 ctx.commandBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                pipeline->getLayout(),
-                0, 2,
-                sets,
-                0, nullptr
+                m_cachedPipeline->getLayout(),
+                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+                0,
+                sizeof(pushData),
+                &pushData
             );
 
-            // Render loop
-            scene.getRegistry().view<MeshComponent, TransformComponent>().each([&](auto entity, auto& meshComp, auto& transformComp) {
-                VulkanMesh* mesh = AssetManager::get().getMesh(meshComp.meshHandle);
-                if (!mesh) return;
+            VkDeviceSize offsets[] = { 0 };
 
-                VkPipelineLayout layout = pipeline->getLayout();
-                VkBuffer vertBuf = mesh->vertexBuffer->getBuffer();
-                VkBuffer ivkBuf = mesh->indexBuffer->getBuffer();
+            VkBuffer vBuffer = mesh->vertexBuffer->getBuffer();
 
-                // Push Constants
-                struct {
-                    glm::mat4 model;
-                    int textureIndex;
-                } pushData;
+            VkBuffer iBuffer = mesh->indexBuffer->getBuffer();
 
-                pushData.model = transformComp.getTransform();
-                pushData.textureIndex = 1;
+            vkCmdBindVertexBuffers(ctx.commandBuffer, 0, 1, &vBuffer, offsets);
 
-                vkCmdPushConstants(
-                    ctx.commandBuffer,
-                    layout,
-                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                    0,
-                    sizeof(pushData),
-                    &pushData
-                );
+            vkCmdBindIndexBuffer(ctx.commandBuffer, iBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-                // Bind and Draw
-                VkDeviceSize offsets[] = { 0 };
-                vkCmdBindVertexBuffers(ctx.commandBuffer, 0, 1, &vertBuf, offsets);
-                vkCmdBindIndexBuffer(ctx.commandBuffer, ivkBuf, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexed(ctx.commandBuffer, mesh->indexCount, 1, 0, 0, 0);
 
-                vkCmdDrawIndexed(ctx.commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-                });
-        }
+            });
 
         vkCmdEndRendering(ctx.commandBuffer);
     }

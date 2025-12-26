@@ -8,6 +8,8 @@
 
 namespace ix 
 {
+    struct RenderGraphCompileConfig;
+
     struct PassEntry 
     {
         std::unique_ptr<RenderGraphPass_I> pass;
@@ -18,7 +20,7 @@ namespace ix
     {
     public:
         void addPass(std::unique_ptr<RenderGraphPass_I> pass);
-        void compile();
+        void compile(const RenderGraphCompileConfig& config);
         void execute(const FrameContext& ctx);
 
         // Helper to get swapchain into the graph

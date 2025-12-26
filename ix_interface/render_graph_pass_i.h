@@ -8,10 +8,7 @@ namespace ix
     class RenderGraphBuilder;
     class RenderGraphRegistry;
     struct FrameContext;
-}
 
-namespace ix
-{
 
     using RGResourceHandle = uint32_t;
     const RGResourceHandle INVALID_RESOURCE = 0xFFFFFFFF;

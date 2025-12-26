@@ -1,0 +1,60 @@
+#version 450
+#extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_ARB_enhanced_layouts : enable
+#extension GL_KHR_vulkan_glsl : enable
+
+// Process in 16x16 chunks
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Set 1: Bindless textures
+layout(set = 1, binding = 0) uniform sampler2D textureArray[];
+
+// Set 2: The destination Cubemap (Allocated as a transient set in ComputePass)
+layout(set = 2, binding = 0, rgba32f) uniform writeonly image2DArray outCubemap;
+
+layout(std140, push_constant) uniform Push 
+{
+    layout(offset = 64) int inputTextureIdx;
+} push;
+
+const vec2 invAtan = vec2(0.1591, 0.3183);
+
+// Helper to convert 3D direction to 2D Equirectangular UV
+vec2 SampleEquirectangular(vec3 v) {
+    vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
+}
+
+void main() {
+    ivec3 cubeCoords = ivec3(gl_GlobalInvocationID);
+    ivec2 imgSize = imageSize(outCubemap).xy;
+
+    // Safety check for dispatch size
+    if (cubeCoords.x >= imgSize.x || cubeCoords.y >= imgSize.y) return;
+
+    // Map pixel to range [-1, 1]
+    vec2 texCoords = vec2(cubeCoords.xy) / vec2(imgSize);
+    vec2 range = texCoords * 2.0 - 1.0;
+
+    // Calculate direction vector for this specific face
+    vec3 v = vec3(0.0);
+
+    // Vulkan/OpenGL Cube Face mapping
+    switch(cubeCoords.z) {
+        case 0: v = vec3(1.0,  -range.y, -range.x); break; // +X
+        case 1: v = vec3(-1.0, -range.y,  range.x); break; // -X
+        case 2: v = vec3(range.x,  1.0,   range.y); break; // +Y
+        case 3: v = vec3(range.x, -1.0,  -range.y); break; // -Y
+        case 4: v = vec3(range.x, -range.y,  1.0); break; // +Z
+        case 5: v = vec3(-range.x, -range.y, -1.0); break; // -Z
+    }
+
+    // Sample the HDR 2D texture using the bindless array
+    vec2 uv = SampleEquirectangular(normalize(v));
+    vec4 color = texture(textureArray[push.inputTextureIdx], uv);
+
+    // Store in the specific Cubemap layer (Z coord maps to array layer)
+    imageStore(outCubemap, cubeCoords, color);
+}

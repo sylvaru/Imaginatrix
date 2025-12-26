@@ -4,6 +4,8 @@
 
 namespace ix 
 {
+    class VulkanPipeline;
+
     class ForwardPass : public RenderGraphPass_I 
     {
     public:
@@ -14,5 +16,9 @@ namespace ix
 
         void execute(const FrameContext& ctx, RenderGraphRegistry& registry) override;
 
+
+    private:
+        VulkanPipeline* m_cachedPipeline = nullptr;
     };
 }
+

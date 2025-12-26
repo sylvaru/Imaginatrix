@@ -208,19 +208,76 @@ namespace ix
         return gpuMesh;
     }
 
-    TextureHandle AssetManager::loadTexture(const std::string& path, bool isHDR) 
+    TextureHandle AssetManager::loadTexture(const std::string& path, bool isHDR)
     {
+        // Always use the same key for the map
         if (m_pathMap.count(path)) return m_pathMap[path];
 
         std::string fullPath = m_texRoot + path;
 
         int width, height, channels;
-        void* pixels = nullptr;
+        void* pixels = nullptr; // For non-HDR
         VkFormat format;
 
         if (isHDR) {
-            pixels = stbi_loadf(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-            format = VK_FORMAT_R32G32B32A32_SFLOAT;
+            float* hdrPixels = stbi_loadf(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+            if (!hdrPixels) {
+                spdlog::error("AssetManager: stbi_loadf failed for HDR path: {}", fullPath);
+                return 0;
+            }
+
+            TextureHandle handle = m_nextAssetHandle++;
+
+            // Create the 2D Source (Equirectangular)
+            auto sourceImage = std::make_unique<VulkanImage>(
+                *m_context,
+                VkExtent2D{ (uint32_t)width, (uint32_t)height },
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                1,      // layerCount
+                false   // createCube
+            );
+
+            // Upload the pixel data
+            sourceImage->uploadData(hdrPixels, width * height * sizeof(float) * 4);
+            stbi_image_free(hdrPixels);
+
+            // Create the Cubemap Destination (Storage Image)
+            VkExtent2D cubeExtent = { 512, 512 };
+            auto cubemap = std::make_unique<VulkanImage>(
+                *m_context,
+                cubeExtent,
+                VK_FORMAT_R32G32B32A32_SFLOAT,
+                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                6,      // layerCount
+                true    // createCube
+            );
+
+            // Assign Bindless Slots
+            uint32_t sourceSlot = m_nextTextureSlot++;
+            uint32_t cubeSlot = m_nextTextureSlot++;
+
+            m_hdrSourceBindlessSlots[handle] = sourceSlot;
+            m_textureToBindlessSlot[handle] = cubeSlot;
+
+            // Store the descriptor infos before moving the pointers
+            auto sourceInfo = sourceImage->getDescriptorInfo(m_defaultSampler);
+            auto cubeInfo = cubemap->getDescriptorInfo(m_defaultSampler);
+
+            // Move ownership to AssetManager maps
+            m_hdrSources[handle] = std::move(sourceImage);
+            m_textures[handle] = std::move(cubemap);
+            m_pathMap[path] = handle;
+
+            // Push to Bindless Update Queue
+            {
+                std::lock_guard<std::mutex> lock(m_queueMutex);
+                m_updateQueue.push({ sourceSlot, sourceInfo });
+                m_updateQueue.push({ cubeSlot, cubeInfo });
+            }
+
+            spdlog::info("AssetManager: Loaded HDR '{}'. Source Index: {}, Cube Index: {}", path, sourceSlot, cubeSlot);
+            return handle;
         }
         else {
             pixels = stbi_load(fullPath.c_str(), &width, &height, &channels, STBI_rgb_alpha);
@@ -228,16 +285,14 @@ namespace ix
         }
 
         if (!pixels) {
-            spdlog::error("AssetManager: Failed to load {}", fullPath);
-            return 0; // Returns slot 0 (magenta)
+            spdlog::error("AssetManager: Failed to load texture at path: {}", fullPath);
+            return 0;
         }
 
         auto image = std::make_unique<VulkanImage>(*m_context, VkExtent2D{ (uint32_t)width, (uint32_t)height }, format,
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
-        uint32_t pixelSize = isHDR ? 16 : 4;
-        image->uploadData(pixels, width * height * pixelSize);
-
+        image->uploadData(pixels, width * height * 4);
         stbi_image_free(pixels);
 
         TextureHandle handle = m_nextAssetHandle++;
@@ -245,9 +300,8 @@ namespace ix
 
         m_textures[handle] = std::move(image);
         m_textureToBindlessSlot[handle] = slot;
-        m_pathMap[fullPath] = handle;
+        m_pathMap[path] = handle;
 
-        // Queue for the Renderer to update the Descriptor Set
         BindlessUpdateRequest req;
         req.slot = slot;
         req.info = m_textures[handle]->getDescriptorInfo(m_defaultSampler);
@@ -259,6 +313,62 @@ namespace ix
 
         return handle;
     }
+
+    uint32_t AssetManager::getTextureBindlessIndex(TextureHandle handle)
+    {
+        auto it = m_textureToBindlessSlot.find(handle);
+        return (it != m_textureToBindlessSlot.end()) ? it->second : 0;
+    }
+
+    VulkanImage* AssetManager::getHDRSource(TextureHandle handle) 
+    {
+        return m_hdrSources.count(handle) ? m_hdrSources[handle].get() : nullptr;
+    }
+
+    uint32_t AssetManager::getHDRSourceBindlessIndex(TextureHandle handle) 
+    {
+        return m_hdrSourceBindlessSlots.count(handle) ? m_hdrSourceBindlessSlots[handle] : 0;
+    }
+
+    VulkanImage* AssetManager::getTexture(TextureHandle handle)
+    {
+        auto it = m_textures.find(handle);
+        if (it != m_textures.end())
+        {
+            return it->second.get(); 
+        }
+
+        spdlog::warn("AssetManager: Attempted to get non-existent texture handle {}", handle);
+        return nullptr;
+    }
+    VulkanMesh* AssetManager::getMesh(AssetHandle handle) 
+    {
+        if (handle == 0) return nullptr;
+
+        auto it = m_meshes.find(handle);
+        if (it == m_meshes.end()) {
+            spdlog::warn("AssetManager: Requested invalid handle {}", handle);
+            return nullptr;
+        }
+
+        VulkanMesh* mesh = it->second.get();
+
+        return mesh;
+    }
+
+    std::vector<BindlessUpdateRequest> AssetManager::takePendingUpdates()
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        std::vector<BindlessUpdateRequest> updates;
+
+        while (!m_updateQueue.empty()) {
+            updates.push_back(m_updateQueue.front());
+            m_updateQueue.pop();
+        }
+
+        return updates;
+    }
+
 
     TextureHandle AssetManager::loadTextureFromMemory(const std::string& name, void* data, uint32_t width, uint32_t height, VkFormat format)
     {
@@ -293,40 +403,6 @@ namespace ix
         return handle;
     }
 
-    std::vector<BindlessUpdateRequest> AssetManager::takePendingUpdates()
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        std::vector<BindlessUpdateRequest> updates;
-
-        while (!m_updateQueue.empty()) {
-            updates.push_back(m_updateQueue.front());
-            m_updateQueue.pop();
-        }
-
-        return updates;
-    }
-
-
-    uint32_t AssetManager::getTextureBindlessIndex(TextureHandle handle)
-    {
-        auto it = m_textureToBindlessSlot.find(handle);
-        return (it != m_textureToBindlessSlot.end()) ? it->second : 0;
-    }
-
-    VulkanMesh* AssetManager::getMesh(AssetHandle handle) 
-    {
-        if (handle == 0) return nullptr;
-
-        auto it = m_meshes.find(handle);
-        if (it == m_meshes.end()) {
-            spdlog::warn("AssetManager: Requested invalid handle {}", handle);
-            return nullptr;
-        }
-
-        VulkanMesh* mesh = it->second.get();
-
-        return mesh;
-    }
     void AssetManager::clearAssetCache()
     {
         spdlog::info("AssetManager: Clearing asset cache...");
@@ -340,6 +416,9 @@ namespace ix
         m_pathMap.clear();
         m_textureToBindlessSlot.clear();
 
+        m_hdrSources.clear();
+        m_hdrSourceBindlessSlots.clear();
+
         // Clear the queue
         std::lock_guard<std::mutex> lock(m_queueMutex);
         while (!m_updateQueue.empty()) m_updateQueue.pop();
@@ -350,8 +429,6 @@ namespace ix
             m_defaultSampler = VK_NULL_HANDLE;
         }
 
-        m_nextAssetHandle = 1;
-        m_nextTextureSlot = 0;
-        spdlog::info("AssetManager: GPU resources released.");
+        spdlog::info("AssetManager: resources released.");
     }
 }

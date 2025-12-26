@@ -3,6 +3,8 @@
 #include <string>
 #include "entity.h"
 #include "input_i.h"
+#include "common/handles.h"
+
 
 namespace ix 
 {
@@ -40,7 +42,15 @@ namespace ix
         };
         CameraMatrices getActiveCameraMatrices(float aspect);
 
+        void setSkybox(TextureHandle handle) { m_skybox = handle; }
+        TextureHandle getSkybox() const { return m_skybox; }
+        void setSkyboxIntensity(float intensity) { m_skyboxIntensity = intensity; }
+        float getSkyboxIntensity() const { return m_skyboxIntensity; }
+
     private:
+
+        TextureHandle m_skybox = 0;
+        float m_skyboxIntensity = 1.0f;
         entt::registry m_registry;
         friend class Entity;
     };

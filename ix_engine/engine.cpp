@@ -33,11 +33,20 @@ namespace ix
 		setupInputCallbacks();
 
 		// Init core systems
-		m_renderer->init();
-
 		auto* vkContext = static_cast <VulkanContext*>(m_renderer->getAPIContext());
 		AssetManager::get().init(vkContext);
+
+		m_renderer->init();
+
 		SceneManager::init();
+
+		for (size_t i{}; i < m_layers.size(); i++)
+		{
+			m_layers[i]->onAttach();
+		}
+
+		m_renderer->compileRenderGraph();
+
 	}
 
 	void Engine::run()

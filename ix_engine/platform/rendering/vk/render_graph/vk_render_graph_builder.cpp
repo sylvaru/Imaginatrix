@@ -4,8 +4,13 @@
 
 namespace ix 
 {
-    RenderGraphBuilder::RenderGraphBuilder(RenderGraphRegistry& registry, std::vector<ResourceRequest>& passRequests)
-        : m_registry(registry), m_currentPassRequests(passRequests) 
+    RenderGraphBuilder::RenderGraphBuilder(
+        RenderGraphRegistry& registry,
+        std::vector<ResourceRequest>& passRequests,
+        const RenderGraphCompileConfig& config)
+        : m_registry(registry)
+        , m_currentPassRequests(passRequests) 
+        , m_config(config)
     {
     }
 

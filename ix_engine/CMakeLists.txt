@@ -23,6 +23,8 @@ add_library(ix_engine STATIC
     platform/rendering/vk/vk_image.cpp
     platform/rendering/vk/vk_pipeline.h
     platform/rendering/vk/vk_pipeline.cpp
+    platform/rendering/vk/vk_compute_pipeline.h
+    platform/rendering/vk/vk_compute_pipeline.cpp
     platform/rendering/vk/vk_pipeline_manager.h
     platform/rendering/vk/vk_pipeline_manager.cpp
     platform/rendering/vk/vk_descriptor_manager.h
@@ -41,6 +43,11 @@ add_library(ix_engine STATIC
     platform/rendering/vk/resource_types/vk_resource_types.cpp
     platform/rendering/vk/passes/forward_pass.h 
     platform/rendering/vk/passes/forward_pass.cpp
+    platform/rendering/vk/passes/compute_pass.h
+    platform/rendering/vk/passes/compute_pass.cpp
+    platform/rendering/vk/passes/skybox_pass.h
+    platform/rendering/vk/passes/skybox_pass.cpp
+
 
     # Core
     core/asset_manager.h
@@ -54,7 +61,7 @@ add_library(ix_engine STATIC
 
     engine.h
     engine.cpp
-)
+  )
 
 target_precompile_headers(ix_engine
     PRIVATE

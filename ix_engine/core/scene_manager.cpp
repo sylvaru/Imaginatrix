@@ -31,7 +31,8 @@ namespace ix
         try {
             file >> sceneData;
         }
-        catch (const std::exception& e) {
+        catch (const std::exception& e) 
+        {
             spdlog::error("SceneManager: JSON Parse Error in {}: {}", fileName, e.what());
             return;
         }
@@ -40,6 +41,22 @@ namespace ix
         auto newScene = std::make_unique<Scene>();
         auto& assetManager = AssetManager::get();
 
+        if (sceneData.contains("environment"))
+        {
+            auto& env = sceneData["environment"];
+            if (env.contains("skybox")) {
+                std::string skyPath = env["skybox"];
+
+                TextureHandle skyHandle = assetManager.loadTexture(skyPath, true);
+
+                newScene->setSkybox(skyHandle);
+                spdlog::info("DEBUG: SceneManager setting skybox {} on Scene at {}", skyHandle, (void*)newScene.get());
+                spdlog::info("SceneManager: Loaded environment skybox: {}", skyPath);
+            }
+            if (env.contains("skyboxIntensity")) {
+                newScene->setSkyboxIntensity(env["skyboxIntensity"].get<float>());
+            }
+        }
         if (sceneData.contains("entities")) 
         {
             for (const auto& item : sceneData["entities"]) {

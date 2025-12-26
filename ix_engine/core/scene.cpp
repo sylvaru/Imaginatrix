@@ -59,7 +59,7 @@ namespace ix
             if (input.isKeyPressed(IxKey::SPACE)) {
                 moveDir += glm::vec3(0.0f, 1.0f, 0.0f);
             }
-            if (input.isKeyPressed(IxKey::LEFT_CONTROL) || input.isKeyPressed(IxKey::X)) {
+            if (input.isKeyPressed(IxKey::LEFT_CONTROL)) {
                 moveDir += glm::vec3(0.0f, -1.0f, 0.0f);
             }
 
@@ -77,11 +77,11 @@ namespace ix
             if (camera.primary) {
                 result.position = transform.position;
 
-                // View Matrix: transpose of rotation * negative translation
-                glm::mat4 rot = glm::toMat4(transform.rotation);
-                glm::mat4 trans = glm::translate(glm::mat4(1.0f), -transform.position);
+                // Get the direction vectors from the quaternion
+                glm::vec3 forward = transform.rotation * glm::vec3(0, 0, -1);
+                glm::vec3 up = transform.rotation * glm::vec3(0, 1, 0);
 
-                result.view = glm::transpose(rot) * trans;
+                result.view = glm::lookAt(transform.position, transform.position + forward, up);
 
                 result.projection = glm::perspective(
                     glm::radians(camera.fov),

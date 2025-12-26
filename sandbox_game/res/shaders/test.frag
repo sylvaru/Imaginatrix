@@ -1,3 +1,4 @@
+// test.frag
 #version 450
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
@@ -15,6 +16,6 @@ layout(push_constant) uniform Push
 
 void main()
 {
-    vec4 texColor = texture(textureArray[nonuniformEXT(push.textureIndex)], fragUV);
+    vec4 texColor = texture(textureArray[(push.textureIndex)], fragUV);
     outColor = texColor;
 }

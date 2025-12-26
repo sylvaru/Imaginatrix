@@ -35,7 +35,6 @@ namespace ix
 		void pushLayer(Args&&... args) {
 			auto layer = std::make_shared<T>(std::forward<Args>(args)...);
 			m_layers.push_back(layer);
-			layer->onAttach();
 		}
 
 		static Engine& get() { return *s_instance; }

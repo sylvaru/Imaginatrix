@@ -37,7 +37,6 @@ namespace ix
         VkCommandPool commandPool;
         VkCommandBuffer commandBuffer;
     };
-
 	
 	class VulkanRenderer : public Renderer_I 
 	{
@@ -53,12 +52,14 @@ namespace ix
         bool beginFrame(FrameContext& ctx) override;
         void endFrame(const FrameContext& ctx) override;
         void loadPipelines(const nlohmann::json& json) override;
+        void compileRenderGraph() override;
         void render(const FrameContext& ctx) override;
 
         // Misc
         void updateGlobalUbo(const FrameContext& ctx);
         void updateBindlessTextures(uint32_t slot, VkDescriptorImageInfo& imageInfo);
         void updateBindlessTextures(const std::vector<BindlessUpdateRequest>& updates);
+
         // Getters
         void* getAPIContext() override { return m_context.get(); }
         FrameData& getCurrentFrame() { return m_frames[m_currentFrameIndex]; }
@@ -72,7 +73,6 @@ namespace ix
         void recreateSwapchain();
         void createCommandBuffers();
         void createSyncObjects();
-
         void createGlobalLayout();
 
     private:
@@ -107,5 +107,7 @@ namespace ix
         VkDescriptorSetLayout m_bindlessLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_bindlessDescriptorSet = VK_NULL_HANDLE;
 
+        VkDescriptorSetLayout m_computeStorageLayout = VK_NULL_HANDLE;
+        RenderGraphCompileConfig m_renderGraphCompileConfig;
 	};
 }

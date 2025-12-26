@@ -1,7 +1,8 @@
 {
     "pipelines": [
         {
-            "name": "test",
+            "name": "ForwardPass",
+            "type": "graphics",
             "vert": "test.vert.spv",
             "frag": "test.frag.spv",
             "state": {
@@ -9,8 +10,29 @@
                 "polygonMode": "fill",
                 "cullMode": "back",
                 "depthTest": true,
-                "depthWrite": true
+                "depthWrite": true,
+                "compareOp": "less"
             }
+        },
+        {
+            "name": "Skybox",
+            "type": "graphics",
+            "vert": "skybox.vert.spv",
+            "frag": "skybox.frag.spv",
+            "state": {
+                "topology": "triangle_list",
+                "polygonMode": "fill",
+                "cullMode": "none",
+                "procedural": true,
+                "depthTest": true,
+                "depthWrite": false,
+                "compareOp": "less_or_equal"
+            }
+        },
+        {
+            "name": "EquirectToCube",
+            "type": "compute",
+            "compute": "equirect_to_cubemap.comp.spv"
         }
     ]
 }

@@ -20,6 +20,8 @@ namespace ix
         std::vector<VkFormat> colorAttachmentFormats;
         VkFormat depthAttachmentFormat = VK_FORMAT_UNDEFINED;
 
+        bool isProcedural = false;
+
         // Explicit equality check for hash collisions
         bool operator==(const PipelineState& other) const {
             return topology == other.topology &&
@@ -30,6 +32,7 @@ namespace ix
                 depthTest == other.depthTest &&
                 depthWrite == other.depthWrite &&
                 depthAttachmentFormat == other.depthAttachmentFormat &&
+                isProcedural == other.isProcedural &&
                 colorAttachmentFormats == other.colorAttachmentFormats;
         }
     };

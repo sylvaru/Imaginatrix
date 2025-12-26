@@ -17,12 +17,12 @@ namespace ix
         m_registry.registerExternalImage(name, image);
     }
 
-    void RenderGraph::compile() 
+    void RenderGraph::compile(const RenderGraphCompileConfig& config)
     {
         for (auto& entry : m_compiledPasses) 
         {
             entry.requests.clear();
-            RenderGraphBuilder builder(m_registry, entry.requests);
+            RenderGraphBuilder builder(m_registry, entry.requests, config);
             entry.pass->setup(builder);
         }
     }

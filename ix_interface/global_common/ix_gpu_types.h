@@ -8,14 +8,18 @@ namespace ix
     class VulkanPipelineManager;
     class AssetManager;
     class VulkanDescriptorManager;
+    class VulkanContext;
 
-    struct GlobalUbo 
+    struct GlobalUbo
     {
         alignas(16) glm::mat4 projection{ 1.f };
         alignas(16) glm::mat4 view{ 1.f };
         alignas(16) glm::vec4 cameraPos{ 0.f };
-        alignas(16) float time{ 0.0f };
-        alignas(16) float deltaTime{ 0.0f };
+
+        float time{ 0.0f };
+        float deltaTime{ 0.0f };
+        float skyboxIntensity{ 1.0f };
+        float padding;
     };
 
     struct FrameContext 
@@ -29,9 +33,18 @@ namespace ix
         VkCommandBuffer commandBuffer;
         VkDescriptorSet globalDescriptorSet;
         VkDescriptorSet bindlessDescriptorSet;
-        class AssetManager* assetManager;
-        class VulkanPipelineManager* pipelineManager;
-        class VulkanDescriptorManager* descriptorManager;
-   
+        VkDescriptorSetLayout computeStorageLayout;
+
+        VulkanContext* context;
+        AssetManager* assetManager;
+        VulkanPipelineManager* pipelineManager;
+        VulkanDescriptorManager* descriptorManager;
     };
+
+    struct RenderGraphCompileConfig
+    {
+        VulkanContext* context;
+        VulkanPipelineManager* pipelineManager;
+    };
+
 }

@@ -47,6 +47,7 @@ namespace ix {
         virtual void render(const FrameContext& ctx) = 0;
 
         virtual void loadPipelines(const nlohmann::json& json) {}
+        virtual void compileRenderGraph() {}
         virtual RenderExtent getSwapchainExtent() const = 0;
         virtual VulkanSwapchain* getSwapchain() = 0;
         virtual uint32_t getCurrentImageIndex() const = 0;

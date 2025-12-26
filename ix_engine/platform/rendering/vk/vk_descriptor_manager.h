@@ -14,12 +14,13 @@ namespace ix
     public:
         struct PoolSizes 
         {
-            std::vector<std::pair<VkDescriptorType, float>> sizes = 
+            std::vector<std::pair<VkDescriptorType, float>> sizes =
             {
                 { VK_DESCRIPTOR_TYPE_SAMPLER, 0.5f },
                 { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4.0f },
                 { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2.0f },
-                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2.0f }
+                { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2.0f },
+                { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1.0f }
             };
         };
 

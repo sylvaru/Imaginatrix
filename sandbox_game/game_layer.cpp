@@ -31,9 +31,13 @@ void GameLayer::onAttach()
     SceneManager::load("level1");
 }
 
+void GameLayer::onUpdate(float dt)
+{
+    SceneManager::getActiveScene().update(dt, Engine::get().getInput());
+}
+
 void GameLayer::onFixedUpdate(float fixedDt) 
 {
-    SceneManager::getActiveScene().update(fixedDt, Engine::get().getInput());
 }
 
 void GameLayer::onRender(float alpha) 

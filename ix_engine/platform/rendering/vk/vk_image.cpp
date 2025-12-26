@@ -7,23 +7,35 @@
 
 namespace ix
 {
-    VulkanImage::VulkanImage(VulkanContext& context, VkExtent2D extent, VkFormat format, VkImageUsageFlags usage)
+    VulkanImage::VulkanImage(
+        VulkanContext& context,
+        VkExtent2D extent,
+        VkFormat format,
+        VkImageUsageFlags usage,
+        uint32_t layerCount,
+        bool createCube)
         : m_context(context)
         , m_format(format)
         , m_extent(extent)
         , m_isBorrowed(false)
+        , m_layerCount(layerCount)
+        , m_isCube(createCube)
     {
         VkImageCreateInfo imgInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
         imgInfo.imageType = VK_IMAGE_TYPE_2D;
         imgInfo.extent = { extent.width, extent.height, 1 };
         imgInfo.mipLevels = 1;
-        imgInfo.arrayLayers = 1;
+        imgInfo.arrayLayers = m_layerCount;
         imgInfo.format = format;
         imgInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
         imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         imgInfo.usage = usage;
         imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         imgInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if (m_isCube)
+        {
+            imgInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        }
 
         VmaAllocationCreateInfo allocInfo{};
         allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -46,21 +58,6 @@ namespace ix
         createView();
     }
 
-    VulkanImage::~VulkanImage()
-    {
-        if (m_view != VK_NULL_HANDLE) {
-            vkDestroyImageView(m_context.device(), m_view, nullptr);
-            m_view = VK_NULL_HANDLE;
-        }
-
-        if (!m_isBorrowed && m_handle != VK_NULL_HANDLE) {
-            vmaDestroyImage(m_context.getAllocator(), m_handle, m_allocation);
-
-            m_handle = VK_NULL_HANDLE;
-            m_allocation = nullptr;
-        }
-    }
-
     void VulkanImage::createView()
     {
         // Determine if this is a Depth or Color image based on format
@@ -71,9 +68,9 @@ namespace ix
 
         VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
         viewInfo.image = m_handle;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.viewType = m_isCube ? VK_IMAGE_VIEW_TYPE_CUBE : (m_layerCount > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D);
         viewInfo.format = m_format;
-        viewInfo.subresourceRange = { aspectFlags, 0, 1, 0, 1 };
+        viewInfo.subresourceRange = { aspectFlags, 0, 1, 0, m_layerCount };
 
         if (vkCreateImageView(m_context.device(), &viewInfo, nullptr, &m_view) != VK_SUCCESS) {
             throw std::runtime_error("VulkanImage: Failed to create image view!");
@@ -97,15 +94,27 @@ namespace ix
 
         barrier.subresourceRange = {
             static_cast<VkImageAspectFlags>(isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT),
-            0, 1, 0, 1
+            0, 1, 0, m_layerCount
         };
 
         // Map Layouts to Stages and Access Masks
-        if (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
-            barrier.srcAccessMask = VK_ACCESS_2_NONE;
-            barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+        if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+            barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        }
+        else if (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+            barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        }
+        else if (newLayout == VK_IMAGE_LAYOUT_GENERAL) {
+            barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         }
         else if (newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
             barrier.srcAccessMask = VK_ACCESS_2_NONE;
@@ -113,23 +122,17 @@ namespace ix
             barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
             barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
         }
+        else if (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
+            barrier.srcAccessMask = VK_ACCESS_2_NONE;
+            barrier.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+        }
         else if (newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
             barrier.srcAccessMask = isDepth ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
             barrier.dstAccessMask = VK_ACCESS_2_NONE;
             barrier.srcStageMask = isDepth ? VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT : VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
             barrier.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-        }
-        else if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-            barrier.srcAccessMask = VK_ACCESS_2_NONE;
-            barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-        }
-        else if (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-            barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-            barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
         }
 
         VkDependencyInfo depInfo{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
@@ -172,6 +175,25 @@ namespace ix
             });
     }
 
+    VkImageView VulkanImage::createAdditionalView(VkImageViewType type, uint32_t layerCount) {
+        VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        viewInfo.image = m_handle;
+        viewInfo.viewType = type;
+        viewInfo.format = m_format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.baseMipLevel = 0;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = layerCount;
+
+        VkImageView view;
+        if (vkCreateImageView(m_context.device(), &viewInfo, nullptr, &view) != VK_SUCCESS) {
+            spdlog::error("VulkanImage: Failed to create additional image view!");
+            return VK_NULL_HANDLE;
+        }
+        m_additionalViews.push_back(view);
+        return view;
+    }
 
     VkDescriptorImageInfo VulkanImage::getImageInfo(VkSampler sampler, VkImageLayout layout)
     {
@@ -184,5 +206,22 @@ namespace ix
         info.imageView = m_view;
         info.sampler = sampler;
         return info;
+    }
+
+    VulkanImage::~VulkanImage()
+    {
+        if (m_view != VK_NULL_HANDLE) {
+            vkDestroyImageView(m_context.device(), m_view, nullptr);
+            m_view = VK_NULL_HANDLE;
+        }
+        for (auto view : m_additionalViews) {
+            vkDestroyImageView(m_context.device(), view, nullptr);
+        }
+
+        if (!m_isBorrowed && m_handle != VK_NULL_HANDLE) {
+            vmaDestroyImage(m_context.getAllocator(), m_handle, m_allocation);
+            m_handle = VK_NULL_HANDLE;
+            m_allocation = nullptr;
+        }
     }
 }

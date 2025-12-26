@@ -1,4 +1,8 @@
 {
+    "environment": {
+        "skybox": "hdr/puresky_4k.hdr",
+        "skyboxIntensity": 0.3
+    },
     "entities": [
         {
             "name": "MainCamera",
