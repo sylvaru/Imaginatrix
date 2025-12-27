@@ -2,7 +2,7 @@
 #include "common/engine_pch.h"
 #include "vk_render_graph.h"
 #include "platform/rendering/vk/vk_image.h"
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 
 namespace ix 
 {
@@ -27,17 +27,17 @@ namespace ix
         }
     }
 
-    void RenderGraph::execute(const FrameContext& ctx) 
+    void RenderGraph::execute(const RenderState& state) 
     {
         for (auto& entry : m_compiledPasses) 
         {
     
             for (const auto& request : entry.requests) 
             {
-                transitionResource(ctx.commandBuffer, request);
+                transitionResource(state.frame.commandBuffer, request);
             }
 
-            entry.pass->execute(ctx, m_registry);
+            entry.pass->execute(state, m_registry);
         }
     }
 

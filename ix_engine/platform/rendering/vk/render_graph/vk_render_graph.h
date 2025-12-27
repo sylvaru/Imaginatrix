@@ -9,6 +9,7 @@
 namespace ix 
 {
     struct RenderGraphCompileConfig;
+    struct RenderState;
 
     struct PassEntry 
     {
@@ -21,7 +22,7 @@ namespace ix
     public:
         void addPass(std::unique_ptr<RenderGraphPass_I> pass);
         void compile(const RenderGraphCompileConfig& config);
-        void execute(const FrameContext& ctx);
+        void execute(const RenderState& state);
 
         // Helper to get swapchain into the graph
         void importImage(const std::string& name, VulkanImage* image);

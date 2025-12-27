@@ -6,12 +6,12 @@ layout(location = 0) out vec3 outUVW;
 
 layout(set = 0, binding = 0) uniform GlobalUbo 
 {
-    mat4 projection;     // offset 0
-    mat4 view;           // offset 64
-    vec4 cameraPos;      // offset 128
-    float time;          // offset 144 (Matches C++ alignas(16))
-    float deltaTime;     // offset 160 (Matches C++ alignas(16))
-    float skyboxIntensity; // offset 176 (Matches C++ alignas(16))
+    mat4 projection;
+    mat4 view;
+    vec4 cameraPos;
+    float time;
+    float deltaTime;
+    float skyboxIntensity;
 } ubo;
 
 vec3 pos[8] = vec3[8](

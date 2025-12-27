@@ -43,8 +43,8 @@ add_library(ix_engine STATIC
     platform/rendering/vk/resource_types/vk_resource_types.cpp
     platform/rendering/vk/passes/forward_pass.h 
     platform/rendering/vk/passes/forward_pass.cpp
-    platform/rendering/vk/passes/compute_pass.h
-    platform/rendering/vk/passes/compute_pass.cpp
+    platform/rendering/vk/passes/equirect_to_cube_pass.h
+    platform/rendering/vk/passes/equirect_to_cube_pass.cpp
     platform/rendering/vk/passes/skybox_pass.h
     platform/rendering/vk/passes/skybox_pass.cpp
 

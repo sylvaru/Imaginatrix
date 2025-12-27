@@ -9,24 +9,25 @@
 #include "engine.h"
 #include "core/scene_manager.h"
 #include "core/components.h"
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 
 
 namespace ix
 {
     ForwardPass::ForwardPass(const std::string& name) : RenderGraphPass_I(name) {}
 
-    void ForwardPass::setup(RenderGraphBuilder& builder) {
+    void ForwardPass::setup(RenderGraphBuilder& builder) 
+    {
         builder.write("BackBuffer");
         builder.write("DepthBuffer");
         m_cachedPipeline = builder.getPipelineManager()->getGraphicsPipeline("ForwardPass");
     }
 
-    void ForwardPass::execute(const FrameContext& ctx, RenderGraphRegistry& registry)
+    void ForwardPass::execute(const RenderState& state, RenderGraphRegistry& registry)
     {
-        if (!m_cachedPipeline) return;
+        if (!m_cachedPipeline || state.frame.instanceCount == 0) return;
 
-        auto& scene = SceneManager::getActiveScene();
+        VkCommandBuffer cmd = state.frame.commandBuffer;
         auto& colorState = registry.getResourceState("BackBuffer");
         auto& depthState = registry.getResourceState("DepthBuffer");
 
@@ -37,7 +38,7 @@ namespace ix
 
         VkExtent2D extent = targetImage->getExtent();
 
-        // Rendering Attachments
+        // Rendering Attachments Setup
         VkRenderingAttachmentInfo colorAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
         colorAttachment.imageView = targetImage->getView();
         colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -59,55 +60,65 @@ namespace ix
         renderingInfo.pColorAttachments = &colorAttachment;
         renderingInfo.pDepthAttachment = &depthAttachment;
 
-        vkCmdBeginRendering(ctx.commandBuffer, &renderingInfo);
+        vkCmdBeginRendering(cmd, &renderingInfo);
 
+        // Set Dynamic States
         VkViewport viewport{ 0.0f, 0.0f, (float)extent.width, (float)extent.height, 0.0f, 1.0f };
-        vkCmdSetViewport(ctx.commandBuffer, 0, 1, &viewport);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
         VkRect2D scissor{ {0, 0}, extent };
-        vkCmdSetScissor(ctx.commandBuffer, 0, 1, &scissor);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
+        // Bind Pipeline
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
 
-        VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet };
-        vkCmdBindDescriptorSets(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_cachedPipeline->getLayout(), 0, 2, sets, 0, nullptr);
+        // Bind all 3 sets (Global, Bindless, Instance)
+        VkDescriptorSet sets[] = 
+        {
+           state.frame.globalDescriptorSet,
+           state.frame.bindlessDescriptorSet,
+           state.frame.instanceDescriptorSet
+        };
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_cachedPipeline->getLayout(), 0, 3, sets, 0, nullptr);
 
-        // Render loop
-        scene.getRegistry().view<MeshComponent, TransformComponent>().each([&](auto entity, auto& meshComp, auto& transformComp) {
-            VulkanMesh* mesh = AssetManager::get().getMesh(meshComp.meshHandle);
-            if (!mesh) return;
 
-            struct {
-                glm::mat4 model;
-                int textureIndex;
-            } pushData;
+        // Log
+        static bool debug_log_once = true;
+        if (debug_log_once) {
+            spdlog::info("--- Forward pass Draw Call Breakdown ---");
+            for (const auto& batch : *state.frame.renderBatches) 
+            {
+                spdlog::info("Batch: MeshHandle {}, Instances: {}, Offset: {}",
+                    batch.meshHandle, batch.instanceCount, batch.firstInstance);
+            }
+            debug_log_once = false; // Only log the first frame
+        }
 
-            pushData.model = transformComp.getTransform();
-            pushData.textureIndex = 3;
-
-            vkCmdPushConstants(
-                ctx.commandBuffer,
-                m_cachedPipeline->getLayout(),
-                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-                0,
-                sizeof(pushData),
-                &pushData
-            );
+        // The Batch Loop
+        for (const auto& batch : *state.frame.renderBatches)
+        {
+            VulkanMesh* mesh = state.system.assetManager->getMesh(batch.meshHandle);
+            if (!mesh) continue;
 
             VkDeviceSize offsets[] = { 0 };
-
             VkBuffer vBuffer = mesh->vertexBuffer->getBuffer();
-
             VkBuffer iBuffer = mesh->indexBuffer->getBuffer();
 
-            vkCmdBindVertexBuffers(ctx.commandBuffer, 0, 1, &vBuffer, offsets);
+            // Bind Geometry
+            vkCmdBindVertexBuffers(cmd, 0, 1, &vBuffer, offsets);
+            vkCmdBindIndexBuffer(cmd, iBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-            vkCmdBindIndexBuffer(ctx.commandBuffer, iBuffer, 0, VK_INDEX_TYPE_UINT32);
+            // Draw
+            vkCmdDrawIndexed(
+                cmd,
+                mesh->indexCount,     // indices in this mesh
+                batch.instanceCount,  // how many of this mesh exist in this batch
+                0,                    // firstIndex
+                0,                    // vertexOffset
+                batch.firstInstance   // Offset gl_InstanceIndex to point to the right slice of SSBO
+            );
+        }
 
-            vkCmdDrawIndexed(ctx.commandBuffer, mesh->indexCount, 1, 0, 0, 0);
-
-            });
-
-        vkCmdEndRendering(ctx.commandBuffer);
+        vkCmdEndRendering(cmd);
     }
 }

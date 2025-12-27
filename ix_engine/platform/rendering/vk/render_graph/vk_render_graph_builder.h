@@ -2,7 +2,7 @@
 #pragma once
 #include <string>
 #include <vector>
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 
 namespace ix 
 {

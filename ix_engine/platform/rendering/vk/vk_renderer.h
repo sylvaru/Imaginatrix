@@ -5,7 +5,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 #include "global_common/ix_event_pods.h"
 #include "vk_buffer.h"
 
@@ -19,24 +19,6 @@ namespace ix
     class RenderGraph;
     class VulkanImage;
 
-    struct DrawCommand 
-    {
-        uint32_t pipelineID;
-        uint32_t materialID;
-        VkBuffer vertexBuffer;
-        VkBuffer indexBuffer;
-        uint32_t indexCount;
-        glm::mat4 transform;
-    };
-
-    struct FrameData
-    {
-        VkSemaphore imageAvailableSemapohore;
-        VkSemaphore renderFinishedSemaphore;
-        VkFence inFlightFence;
-        VkCommandPool commandPool;
-        VkCommandBuffer commandBuffer;
-    };
 	
 	class VulkanRenderer : public Renderer_I 
 	{
@@ -49,14 +31,14 @@ namespace ix
         void shutdown() override;
         void onResize(uint32_t width, uint32_t height) override;
         void waitIdle() override;
-        bool beginFrame(FrameContext& ctx) override;
+        bool beginFrame(FrameContext& ctx, const SceneView& view) override;
         void endFrame(const FrameContext& ctx) override;
         void loadPipelines(const nlohmann::json& json) override;
         void compileRenderGraph() override;
-        void render(const FrameContext& ctx) override;
+        void render(const FrameContext& ctx, const SceneView& view) override;
 
         // Misc
-        void updateGlobalUbo(const FrameContext& ctx);
+        void updateGlobalUbo(const SceneView& view);
         void updateBindlessTextures(uint32_t slot, VkDescriptorImageInfo& imageInfo);
         void updateBindlessTextures(const std::vector<BindlessUpdateRequest>& updates);
 
@@ -73,7 +55,10 @@ namespace ix
         void recreateSwapchain();
         void createCommandBuffers();
         void createSyncObjects();
-        void createGlobalLayout();
+        void createPipelineLayouts();
+        
+        // Misc
+        void updateInstanceBuffer();
 
     private:
         Window_I& m_window;
@@ -92,7 +77,10 @@ namespace ix
         std::unique_ptr<VulkanPipelineManager> m_pipelineManager;
         std::vector<std::unique_ptr<VulkanDescriptorManager>> m_descriptorManagers;
         
-        VkPipelineLayout m_defaultLayout;
+        VkPipelineLayout m_graphicsPipelineLayout;
+        VkPipelineLayout m_computePipelineLayout;
+
+
         VkDescriptorSetLayout m_globalDescriptorLayout;
 
         std::vector<std::unique_ptr<VulkanBuffer>> m_globalUboBuffers;
@@ -109,5 +97,15 @@ namespace ix
 
         VkDescriptorSetLayout m_computeStorageLayout = VK_NULL_HANDLE;
         RenderGraphCompileConfig m_renderGraphCompileConfig;
+
+        // GPU driven rendering
+        std::unique_ptr<VulkanBuffer> m_instanceBuffer; // This acts as a database of very object in the scene
+        uint32_t m_currentInstanceCount = 0;
+        VkDescriptorSetLayout m_instanceDescriptorLayout;
+        
+        // Batching
+        std::vector<RenderBatch> m_renderBatches;
+        std::vector<GPUInstanceData> m_cpuInstanceCache;
+        std::unordered_map<MeshHandle, std::vector<GPUInstanceData>> m_batchMapCache;
 	};
 }

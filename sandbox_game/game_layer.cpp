@@ -6,8 +6,8 @@
 #include "core/components.h"
 
 
-
 using namespace ix;
+
 void GameLayer::onAttach()
 {
 
@@ -29,6 +29,31 @@ void GameLayer::onAttach()
 
     // Load the level
     SceneManager::load("level1");
+
+    // Stress-test grid of planes
+    auto& scene = SceneManager::getActiveScene();
+    auto& assetManager = AssetManager::get();
+
+    // Get the handles from the existing textured quad so we use the same assets
+    AssetHandle meshHandle = assetManager.loadModel("plane.gltf");
+    TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
+
+    // 50 * 50 = 2,500 entities
+    for (int x = -25; x < 25; x++) {
+        for (int z = -25; z < 25; z++) {
+            auto entity = scene.createEntity("Floor_Instance");
+
+            auto& tc = entity.addComponent<TransformComponent>();
+
+            // Wide spacing to make culling obvious
+            tc.position = { (float)x * 60.0f, -2.0f, (float)z * 60.0f };
+
+            // Scale them up slightly so they are easy to see from the camera
+            tc.scale = { 5.0f, 5.0f, 5.0f };
+
+            entity.addComponent<MeshComponent>(meshHandle, texHandle);
+        }
+    }
 }
 
 void GameLayer::onUpdate(float dt)

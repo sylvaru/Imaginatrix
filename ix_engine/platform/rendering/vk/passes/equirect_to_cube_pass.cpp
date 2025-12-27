@@ -1,5 +1,5 @@
 #include "common/engine_pch.h"
-#include "compute_pass.h"
+#include "equirect_to_cube_pass.h"
 #include "platform/rendering/vk/render_graph/vk_render_graph_builder.h"
 #include "platform/rendering/vk/render_graph/vk_render_graph_registry.h"
 #include "platform/rendering/vk/vk_pipeline_manager.h"
@@ -10,18 +10,19 @@
 #include "core/asset_manager.h"
 #include "core/scene_manager.h"
 #include "core/components.h"
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 
 
 namespace ix 
 {
 
-    ComputePass::ComputePass(const std::string& name) : RenderGraphPass_I(name) {}
+    EquirectToCubemapPass::EquirectToCubemapPass(const std::string& name) : RenderGraphPass_I(name) {}
 
-    void ComputePass::setup(RenderGraphBuilder& builder) {}
+    void EquirectToCubemapPass::setup(RenderGraphBuilder& builder) {}
 
-    void ComputePass::execute(const FrameContext& ctx, RenderGraphRegistry& registry) 
+    void EquirectToCubemapPass::execute(const RenderState& state, RenderGraphRegistry& registry)
     {
+        VkCommandBuffer cmd = state.frame.commandBuffer;
         auto& scene = SceneManager::getActiveScene();
         TextureHandle skyHandle = scene.getSkybox();
 
@@ -39,7 +40,7 @@ namespace ix
 
         // Allocate transient descriptor set for the Storage Image
         VkDescriptorSet storageSet;
-        if (!ctx.descriptorManager->allocate(&storageSet, ctx.computeStorageLayout)) 
+        if (!state.system.descriptorManager->allocate(&storageSet, state.system.computeStorageLayout)) 
         {
             spdlog::error("ComputePass: Failed to allocate storage descriptor set");
             return;
@@ -54,26 +55,30 @@ namespace ix
 
         DescriptorWriter writer;
         writer.writeImage(0, &imageInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        writer.updateSet(*ctx.context, storageSet);
+        writer.updateSet(*state.system.context, storageSet);
 
         // Transition Cubemap to GENERAL for writing
-        cubemap->transition(ctx.commandBuffer, VK_IMAGE_LAYOUT_GENERAL);
+        cubemap->transition(cmd, VK_IMAGE_LAYOUT_GENERAL);
 
-        auto* pipeline = ctx.pipelineManager->getComputePipeline("EquirectToCube");
+        auto* pipeline = state.system.pipelineManager->getComputePipeline("EquirectToCube");
 
         if (pipeline) {
-            vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->getHandle());
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->getHandle());
 
             // Set 0: Global, Set 1: Bindless, Set 2: Storage (Output)
-            VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet, storageSet };
-            vkCmdBindDescriptorSets(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+            VkDescriptorSet sets[] = {
+                 state.frame.globalDescriptorSet,
+                 state.frame.bindlessDescriptorSet,
+                 storageSet
+            };
+            vkCmdBindDescriptorSets(state.frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 pipeline->getLayout(), 0, 3, sets, 0, nullptr);
 
             uint32_t allStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-            vkCmdPushConstants(ctx.commandBuffer, pipeline->getLayout(),
+            vkCmdPushConstants(state.frame.commandBuffer, pipeline->getLayout(),
                 allStages, 64, sizeof(uint32_t), &sourceHdrIndex);
 
-            vkCmdDispatch(ctx.commandBuffer, 512 / 16, 512 / 16, 6);
+            vkCmdDispatch(cmd, 512 / 16, 512 / 16, 6);
         }
 
         VkImageMemoryBarrier2 barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
@@ -89,7 +94,7 @@ namespace ix
         VkDependencyInfo depInfo{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
         depInfo.imageMemoryBarrierCount = 1;
         depInfo.pImageMemoryBarriers = &barrier;
-        vkCmdPipelineBarrier2(ctx.commandBuffer, &depInfo);
+        vkCmdPipelineBarrier2(cmd, &depInfo);
 
         convertedTextures.insert(skyHandle);
 

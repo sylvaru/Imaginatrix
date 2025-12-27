@@ -9,10 +9,9 @@ namespace ix
 { 
     class Scene; 
     struct FrameContext;
+    struct SceneView;
     class VulkanSwapchain;
-}
-
-namespace ix {
+    
 
     enum class RendererAPI { None, Vulkan, OpenGL };
 
@@ -42,9 +41,9 @@ namespace ix {
         virtual void onResize(uint32_t width, uint32_t height) = 0;
 
         // The Frame Cycle
-        virtual bool beginFrame(FrameContext& ctx) = 0;
+        virtual bool beginFrame(FrameContext& ctx, const SceneView& view) = 0;
         virtual void endFrame(const FrameContext& ctx) = 0;
-        virtual void render(const FrameContext& ctx) = 0;
+        virtual void render(const FrameContext& ctx, const SceneView& view) = 0;
 
         virtual void loadPipelines(const nlohmann::json& json) {}
         virtual void compileRenderGraph() {}

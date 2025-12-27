@@ -14,7 +14,7 @@ namespace ix
 
         void setup(RenderGraphBuilder& builder) override;
 
-        void execute(const FrameContext& ctx, RenderGraphRegistry& registry) override;
+        void execute(const RenderState& state, RenderGraphRegistry& registry) override;
 
 
     private:

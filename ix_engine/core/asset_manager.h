@@ -65,8 +65,9 @@ namespace ix
 
         VkSampler m_defaultSampler = VK_NULL_HANDLE;
 
-        uint32_t m_nextTextureSlot = 0;
-        uint32_t m_nextAssetHandle = 1;
+        uint32_t m_nextMeshHandle = 1;    // For VulkanMesh
+        uint32_t m_nextTextureHandle = 1; // For VulkanImage
+        uint32_t m_nextTextureSlot = 0;   // The actual GPU bindless index
 
         std::unordered_map<TextureHandle, std::unique_ptr<VulkanImage>> m_hdrSources;
         std::unordered_map<TextureHandle, uint32_t> m_hdrSourceBindlessSlots;

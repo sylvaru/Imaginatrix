@@ -27,7 +27,8 @@ namespace ix
 
         TransformComponent() = default;
 
-        glm::mat4 getTransform() const {
+        glm::mat4 getTransform() const 
+        {
             return glm::translate(glm::mat4(1.0f), position) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
 

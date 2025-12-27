@@ -8,7 +8,7 @@
 #include "engine.h"
 #include "core/scene_manager.h"
 #include "core/components.h"
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 
 
 
@@ -27,8 +27,10 @@ namespace ix
         }
 	}
 
-    void SkyboxPass::execute(const FrameContext& ctx, RenderGraphRegistry& registry)
+    void SkyboxPass::execute(const RenderState& state, RenderGraphRegistry& registry)
     {
+
+        VkCommandBuffer cmd = state.frame.commandBuffer;
         auto& scene = SceneManager::getActiveScene();
         TextureHandle skyHandle = scene.getSkybox();
         if (skyHandle == 0) {
@@ -64,7 +66,7 @@ namespace ix
         renderingInfo.pColorAttachments = &colorAttachment;
         renderingInfo.pDepthAttachment = &depthAttachment;
 
-        vkCmdBeginRendering(ctx.commandBuffer, &renderingInfo);
+        vkCmdBeginRendering(cmd, &renderingInfo);
 
         VkViewport viewport{};
         viewport.x = 0.0f;
@@ -73,30 +75,30 @@ namespace ix
         viewport.height = static_cast<float>(extent.height);
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(ctx.commandBuffer, 0, 1, &viewport);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
 
         VkRect2D scissor{ {0, 0}, extent };
-        vkCmdSetScissor(ctx.commandBuffer, 0, 1, &scissor);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
         
         if (m_cachedPipeline)
         {
-            vkCmdBindPipeline(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
 
-            VkDescriptorSet sets[] = { ctx.globalDescriptorSet, ctx.bindlessDescriptorSet };
-            vkCmdBindDescriptorSets(ctx.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            VkDescriptorSet sets[] = { state.frame.globalDescriptorSet, state.frame.bindlessDescriptorSet };
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 m_cachedPipeline->getLayout(), 0, 2, sets, 0, nullptr);
 
             int skyboxIdx = AssetManager::get().getTextureBindlessIndex(skyHandle);
 
             uint32_t allStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
-            vkCmdPushConstants(ctx.commandBuffer, m_cachedPipeline->getLayout(),
+            vkCmdPushConstants(cmd, m_cachedPipeline->getLayout(),
                 allStages,
                 64, sizeof(int), &skyboxIdx);
 
-            vkCmdDraw(ctx.commandBuffer, 36, 1, 0, 0);
+            vkCmdDraw(cmd, 36, 1, 0, 0);
         }
 
-        vkCmdEndRendering(ctx.commandBuffer);
+        vkCmdEndRendering(cmd);
     }
 }

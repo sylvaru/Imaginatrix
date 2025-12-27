@@ -8,7 +8,7 @@ namespace ix
     class RenderGraphBuilder;
     class RenderGraphRegistry;
     struct FrameContext;
-
+    struct RenderState;
 
     using RGResourceHandle = uint32_t;
     const RGResourceHandle INVALID_RESOURCE = 0xFFFFFFFF;
@@ -28,7 +28,7 @@ namespace ix
 
         virtual void setup(RenderGraphBuilder& builder) = 0;
 
-        virtual void execute(const FrameContext& ctx, RenderGraphRegistry& registry) = 0;
+        virtual void execute(const RenderState& state, RenderGraphRegistry& registry) = 0;
 
         const std::string& getName() const { return m_name; }
 

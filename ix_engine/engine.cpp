@@ -1,7 +1,7 @@
 // engine.cpp
 #include "common/engine_pch.h"
 #include "engine.h"
-#include "global_common/ix_gpu_types.h"
+#include "global_common/ix_global_pods.h"
 #include "core/scene_manager.h"
 #include "platform/rendering/rendering_api.h"
 #include "platform/glfw_platform.h"
@@ -33,17 +33,14 @@ namespace ix
 		setupInputCallbacks();
 
 		// Init core systems
-		auto* vkContext = static_cast <VulkanContext*>(m_renderer->getAPIContext());
+		auto* vkContext = static_cast <VulkanContext*>(m_renderer->getAPIContext()); // Subject to change
 		AssetManager::get().init(vkContext);
 
 		m_renderer->init();
 
 		SceneManager::init();
 
-		for (size_t i{}; i < m_layers.size(); i++)
-		{
-			m_layers[i]->onAttach();
-		}
+		for (size_t i{}; i < m_layers.size(); i++) m_layers[i]->onAttach();
 
 		m_renderer->compileRenderGraph();
 
@@ -85,32 +82,28 @@ namespace ix
 			}
 			auto extent = m_renderer->getSwapchainExtent();
 			float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-			auto activeCameraMatrices = SceneManager::getActiveCameraMatrices(aspect);
+			auto camera = SceneManager::getActiveCameraMatrices(aspect);
 
-			FrameContext ctx;
-			ctx.deltaTime = static_cast<float>(frameTime);
-			//ctx.totalTime = /* tracked total time */;
-			ctx.viewMatrix = activeCameraMatrices.getView();
-			ctx.projectionMatrix = activeCameraMatrices.getProj();
-			ctx.cameraPosition = activeCameraMatrices.getPos();
-			ctx.assetManager = &AssetManager::get();
+			SceneView view;
+			view.deltaTime = static_cast<float>(frameTime);
+			// TODO: Add total time
+			view.viewMatrix = camera.getView();
+			view.projectionMatrix = camera.getProj();
+			view.cameraPosition = camera.getPos();
 
-
-			if (m_renderer->beginFrame(ctx)) 
+			FrameContext frameCtx;
+			if (m_renderer->beginFrame(frameCtx, view))
 			{ 
 
 				float alpha = static_cast<float>(accumulator / dt);
-				for (auto& layer : m_layers) {
-					layer->onUpdate(static_cast<float>(frameTime));
-				}
 
-				m_renderer->render(ctx);
+				for (auto& layer : m_layers) layer->onUpdate(static_cast<float>(frameTime));
 
-				for (auto& layer : m_layers) {
-					layer->onRender(alpha);
-				}
+				m_renderer->render(frameCtx, view);
 
-				m_renderer->endFrame(ctx);
+				for (auto& layer : m_layers) layer->onRender(alpha);
+
+				m_renderer->endFrame(frameCtx);
 			}
 			
 		}
