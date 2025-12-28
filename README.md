@@ -8,7 +8,7 @@ Core Philosophy
 
     Performance First: Minimizing CPU-side overhead through aggressive instancing, persistent memory caching, and reduced heap allocations during the render loop.
 
-    Scalability: Designed to handle thousands of entities through efficient batching and upcoming GPU-driven culling pass.
+    Scalability: Designed to handle thousands of entities through efficient batching and compute frustum culling pass.
 
 Key Features
 
