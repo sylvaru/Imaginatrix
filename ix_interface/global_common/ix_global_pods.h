@@ -30,23 +30,31 @@ namespace ix
         VulkanPipelineManager* pipelineManager;
     };
 
-    struct GPUIndirectCommand // This is what the GPU hardware reads
+    struct GPUIndirectCommand
     {
-        uint32_t indexCount;
-        uint32_t instanceCount;
-        uint32_t firstIndex;
-        int32_t  vertexOffset;
-        uint32_t firstInstance;
+        uint32_t indexCount;    // Set to your mesh index count (e.g., 6 for quad)
+        uint32_t instanceCount; // Reset to 0, incremented by Compute Shader
+        uint32_t firstIndex;    // 0
+        int32_t  vertexOffset;  // 0
+        uint32_t firstInstance; // 0
+        uint32_t _padding[11];  // Padding to align the NEXT data to a 64-byte boundary
     };
 
-    struct GPUInstanceData // This is the per-object data (stored in a Storage Buffer)
+    struct CullingPushConstants
     {
-        glm::mat4 modelMatrix;
-        uint32_t  textureIndex;
-        float     boundingRadius; // For culling
-        uint32_t  _padding[2];
+        glm::mat4 viewProj;     // 64 bytes - The Camera's Frustum
+        uint32_t maxInstances;  // 4 bytes  - Total instances in the scene
+        uint32_t debugCulling;
+        uint32_t _pad[2];       // 12 bytes - Rounds total to 80 bytes
     };
 
+    struct GPUInstanceData {
+        glm::mat4 modelMatrix;   // 64 bytes
+        uint32_t  textureIndex;  // 4 bytes
+        float     boundingRadius;// 4 bytes
+        uint32_t  batchID;       // 4 bytes
+        uint32_t  _padding;      // 4 bytes
+    };
     struct RenderBatch
     {
         MeshHandle meshHandle;
@@ -61,6 +69,7 @@ namespace ix
         VulkanPipelineManager* pipelineManager;
         VulkanDescriptorManager* descriptorManager;
         VkDescriptorSetLayout computeStorageLayout;
+        VkDescriptorSetLayout computeCullingLayout;
     };
 
     // The specific "State" of the current frame
@@ -73,6 +82,7 @@ namespace ix
         VkDescriptorSet globalDescriptorSet;
         VkDescriptorSet bindlessDescriptorSet;
         VkDescriptorSet instanceDescriptorSet;
+        VkDescriptorSet cullingDescriptorSet;
 
         // Batching & Culling results
         uint32_t instanceCount;
@@ -113,6 +123,13 @@ namespace ix
         VkFence inFlightFence;
         VkCommandPool commandPool;
         VkCommandBuffer commandBuffer;
+    };
+
+    struct FrameDescriptorSetGroup 
+    {
+        VkDescriptorSet globalSet;      // Set 0: Global UBO
+        VkDescriptorSet instanceSet;    // Set 2: Culled Instance Data (For Forward Pass)
+        VkDescriptorSet cullingSet;     // Set 2: Input + Output Data (For Compute Pass)
     };
 
 

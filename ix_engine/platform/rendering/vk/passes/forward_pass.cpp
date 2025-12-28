@@ -31,6 +31,7 @@ namespace ix
         auto& colorState = registry.getResourceState("BackBuffer");
         auto& depthState = registry.getResourceState("DepthBuffer");
 
+        VulkanBuffer* culledBuffer = registry.getBuffer("CulledInstances");
         VulkanImage* targetImage = colorState.physicalImage;
         VulkanImage* depthImage = depthState.physicalImage;
 
@@ -95,6 +96,7 @@ namespace ix
         }
 
         // The Batch Loop
+        uint32_t batchIndex = 0;
         for (const auto& batch : *state.frame.renderBatches)
         {
             VulkanMesh* mesh = state.system.assetManager->getMesh(batch.meshHandle);
@@ -109,14 +111,15 @@ namespace ix
             vkCmdBindIndexBuffer(cmd, iBuffer, 0, VK_INDEX_TYPE_UINT32);
 
             // Draw
-            vkCmdDrawIndexed(
+            vkCmdDrawIndexedIndirect(
                 cmd,
-                mesh->indexCount,     // indices in this mesh
-                batch.instanceCount,  // how many of this mesh exist in this batch
-                0,                    // firstIndex
-                0,                    // vertexOffset
-                batch.firstInstance   // Offset gl_InstanceIndex to point to the right slice of SSBO
+                culledBuffer->getBuffer(),
+                batchIndex * sizeof(GPUIndirectCommand),
+                1,
+                sizeof(GPUIndirectCommand)
             );
+
+            batchIndex++;
         }
 
         vkCmdEndRendering(cmd);

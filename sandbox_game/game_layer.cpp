@@ -34,7 +34,6 @@ void GameLayer::onAttach()
     auto& scene = SceneManager::getActiveScene();
     auto& assetManager = AssetManager::get();
 
-    // Get the handles from the existing textured quad so we use the same assets
     AssetHandle meshHandle = assetManager.loadModel("plane.gltf");
     TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
 
@@ -45,10 +44,7 @@ void GameLayer::onAttach()
 
             auto& tc = entity.addComponent<TransformComponent>();
 
-            // Wide spacing to make culling obvious
             tc.position = { (float)x * 60.0f, -2.0f, (float)z * 60.0f };
-
-            // Scale them up slightly so they are easy to see from the camera
             tc.scale = { 5.0f, 5.0f, 5.0f };
 
             entity.addComponent<MeshComponent>(meshHandle, texHandle);

@@ -117,7 +117,7 @@ namespace ix
     }
 
     // DescriptorWriter
-    void DescriptorWriter::writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type) 
+    DescriptorWriter& DescriptorWriter::writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type)
     {
         VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
         write.dstBinding = binding;
@@ -125,15 +125,11 @@ namespace ix
         write.descriptorType = type;
         write.pBufferInfo = bufferInfo;
         m_writes.push_back(write);
+
+        return *this; // This allows chaining
     }
 
-    void DescriptorWriter::updateSet(VulkanContext& context, VkDescriptorSet set) 
-    {
-        for (auto& w : m_writes) w.dstSet = set;
-        vkUpdateDescriptorSets(context.device(), (uint32_t)m_writes.size(), m_writes.data(), 0, nullptr);
-    }
-
-    void DescriptorWriter::writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement)
+    DescriptorWriter& DescriptorWriter::writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement)
     {
         VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
         write.dstBinding = binding;
@@ -142,6 +138,14 @@ namespace ix
         write.descriptorType = type;
         write.pImageInfo = imageInfo;
         m_writes.push_back(write);
+
+        return *this; // This allows chaining
+    }
+
+    void DescriptorWriter::updateSet(VulkanContext& context, VkDescriptorSet set)
+    {
+        for (auto& w : m_writes) w.dstSet = set;
+        vkUpdateDescriptorSets(context.device(), (uint32_t)m_writes.size(), m_writes.data(), 0, nullptr);
     }
 
 }

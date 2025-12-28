@@ -73,7 +73,7 @@ namespace ix
                     // Position
                     if (tJson.contains("pos")) {
                         auto p = tJson["pos"];
-                        tc.position = { p[0], p[1], p[2] };
+                        tc.setPosition({ p[0], p[1], p[2] });
                     }
 
                     // Rotation
@@ -84,13 +84,13 @@ namespace ix
                             glm::radians((float)r[1]),
                             glm::radians((float)r[2])
                         };
-                        tc.rotation = glm::quat(eulerRadians);
+                        tc.setRotation(glm::quat(eulerRadians));
                     }
 
                     // Scale
                     if (tJson.contains("scale")) {
                         auto s = tJson["scale"];
-                        tc.scale = { s[0], s[1], s[2] };
+                        tc.setScale({ s[0], s[1], s[2] });
                     }
                 }
                 if (item.contains("camera"))

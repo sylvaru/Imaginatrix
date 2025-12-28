@@ -55,7 +55,7 @@ namespace ix
 		double accumulator = 0.0;
 
 		// Fixed delta time
-		const double dt = 1.0 / 144.0;
+		const double dt = 1.0 / 500.0;
 
 		while (!m_window.isWindowShouldClose())
 		{

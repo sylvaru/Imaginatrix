@@ -2,6 +2,7 @@
 #include "common/engine_pch.h"
 #include "vk_render_graph.h"
 #include "platform/rendering/vk/vk_image.h"
+#include "platform/rendering/vk/vk_buffer.h"
 #include "global_common/ix_global_pods.h"
 
 namespace ix 
@@ -41,39 +42,63 @@ namespace ix
         }
     }
 
-    void RenderGraph::transitionResource(VkCommandBuffer cmd, const ResourceRequest& request) 
+    void RenderGraph::transitionResource(VkCommandBuffer cmd, const ResourceRequest& request)
     {
         auto& state = m_registry.getResourceState(request.name);
 
-        if (!state.physicalImage) 
+        if (state.physicalImage)
         {
-            spdlog::error("RenderGraph: Cannot transition '{}' - no image bound!", request.name);
+            VulkanImage* img = state.physicalImage;
+            VkImageLayout targetLayout;
+
+            if (request.name == "DepthBuffer") {
+                targetLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            }
+            else if (request.access == AccessType::Write) {
+                targetLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+            else {
+                targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+
+            if (img->getLayout() != targetLayout) {
+                img->transition(cmd, targetLayout);
+                state.currentLayout = targetLayout;
+            }
             return;
         }
 
-        VulkanImage* img = state.physicalImage;
-
-        VkImageLayout targetLayout;
-
-        if (request.name == "DepthBuffer") 
+        if (state.physicalBuffer)
         {
-            targetLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        }
-        else if (request.access == AccessType::Write) 
-        {
-            targetLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        }
-        else 
-        {
-            targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            VkAccessFlags targetAccess = (request.access == AccessType::Write)
+                ? (VK_ACCESS_SHADER_WRITE_BIT)
+                : (VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
+
+            // Read-after-Write check
+            // If the buffer was written to previously and we are now reading (or writing again)
+            if (state.currentAccess & VK_ACCESS_SHADER_WRITE_BIT)
+            {
+                VkBufferMemoryBarrier barrier{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+                barrier.srcAccessMask = state.currentAccess;
+                barrier.dstAccessMask = targetAccess;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.buffer = state.physicalBuffer->getBuffer();
+                barrier.offset = 0;
+                barrier.size = VK_WHOLE_SIZE;
+
+                vkCmdPipelineBarrier(
+                    cmd,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                    0, 0, nullptr, 1, &barrier, 0, nullptr
+                );
+            }
+
+            state.currentAccess = targetAccess;
+            return;
         }
 
-        if (img->getLayout() != targetLayout) 
-        {
-            img->transition(cmd, targetLayout);
-
-            state.currentLayout = targetLayout;
-
-        }
+        spdlog::error("RenderGraph: Resource '{}' has no physical image or buffer bound!", request.name);
     }
 }

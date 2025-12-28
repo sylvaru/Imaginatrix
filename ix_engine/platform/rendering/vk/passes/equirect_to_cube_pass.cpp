@@ -74,9 +74,9 @@ namespace ix
             vkCmdBindDescriptorSets(state.frame.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 pipeline->getLayout(), 0, 3, sets, 0, nullptr);
 
-            uint32_t allStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+            uint32_t stages = VK_SHADER_STAGE_COMPUTE_BIT;
             vkCmdPushConstants(state.frame.commandBuffer, pipeline->getLayout(),
-                allStages, 64, sizeof(uint32_t), &sourceHdrIndex);
+                stages, 64, sizeof(uint32_t), &sourceHdrIndex);
 
             vkCmdDispatch(cmd, 512 / 16, 512 / 16, 6);
         }

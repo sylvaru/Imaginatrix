@@ -33,6 +33,11 @@
             "name": "EquirectToCube",
             "type": "compute",
             "compute": "equirect_to_cubemap.comp.spv"
+        },
+        {
+            "name": "FrustumCull",
+            "type": "compute",
+            "compute": "frustum_culling.comp.spv"
         }
     ]
 }

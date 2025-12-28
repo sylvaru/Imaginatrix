@@ -49,11 +49,12 @@ namespace ix
     };
 
     // The "Writer" handles the actual binding logic efficiently
-    class DescriptorWriter 
+    class DescriptorWriter
     {
     public:
-        void writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type);
-        void writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement = 0);
+        // Change void to DescriptorWriter&
+        DescriptorWriter& writeBuffer(uint32_t binding, VkDescriptorBufferInfo* bufferInfo, uint32_t count, VkDescriptorType type);
+        DescriptorWriter& writeImage(uint32_t binding, VkDescriptorImageInfo* imageInfo, uint32_t count, VkDescriptorType type, uint32_t arrayElement = 0);
 
         void updateSet(VulkanContext& context, VkDescriptorSet set);
 

@@ -38,6 +38,7 @@ namespace ix
         uint32_t getTextureBindlessIndex(TextureHandle handle);
         VulkanImage* getHDRSource(TextureHandle handle);
         uint32_t getHDRSourceBindlessIndex(TextureHandle handle);
+        float getMeshBoundingRadius(AssetHandle handle);
 
         std::vector<BindlessUpdateRequest> takePendingUpdates();
         void setModelRoot(const std::string& root) { m_modelRoot = root; }
@@ -67,9 +68,10 @@ namespace ix
 
         uint32_t m_nextMeshHandle = 1;    // For VulkanMesh
         uint32_t m_nextTextureHandle = 1; // For VulkanImage
-        uint32_t m_nextTextureSlot = 0;   // The actual GPU bindless index
+        uint32_t m_nextTextureSlot = 0;   // GPU bindless index
 
         std::unordered_map<TextureHandle, std::unique_ptr<VulkanImage>> m_hdrSources;
         std::unordered_map<TextureHandle, uint32_t> m_hdrSourceBindlessSlots;
+        std::unordered_map<AssetHandle, float> m_meshRadii;
     };
 }

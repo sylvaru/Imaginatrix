@@ -27,5 +27,7 @@ namespace ix
         std::unique_ptr<VulkanBuffer> indexBuffer;
         uint32_t vertexCount{};
         uint32_t indexCount{};
+
+        float boundingRadius = 0.0f;
     };
 }

@@ -27,9 +27,20 @@ namespace ix
 
         TransformComponent() = default;
 
-        glm::mat4 getTransform() const 
+        bool dirty = true;
+        glm::mat4 worldMatrix{ 1.0f };
+
+        void setPosition(const glm::vec3& p) { position = p; dirty = true; }
+        void setRotation(const glm::quat& r) { rotation = r; dirty = true; }
+        void setScale(const glm::vec3& s) { scale = s;    dirty = true; }
+
+        glm::mat4 getTransform()
         {
-            return glm::translate(glm::mat4(1.0f), position) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
+            if (dirty) {
+                worldMatrix = glm::translate(glm::mat4(1.0f), position) * glm::toMat4(rotation) * glm::scale(glm::mat4(1.0f), scale);
+                dirty = false;
+            }
+            return worldMatrix;
         }
 
         glm::vec3 getForward() const { return rotation * glm::vec3(0, 0, -1); }

@@ -26,10 +26,12 @@ namespace ix
 
         // Helper to get swapchain into the graph
         void importImage(const std::string& name, VulkanImage* image);
-        void clearExternalResources() {
-            m_registry.clearExternalResources();
+        void importBuffer(const std::string& name, VulkanBuffer* buffer) 
+        {
+            m_registry.registerExternalBuffer(name, buffer);
         }
 
+        void clearExternalResources() { m_registry.clearExternalResources(); }
     private:
         void transitionResource(VkCommandBuffer cmd, const ResourceRequest& request);
 

@@ -90,10 +90,10 @@ namespace ix
 
             int skyboxIdx = AssetManager::get().getTextureBindlessIndex(skyHandle);
 
-            uint32_t allStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+            uint32_t stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
             vkCmdPushConstants(cmd, m_cachedPipeline->getLayout(),
-                allStages,
+                stages,
                 64, sizeof(int), &skyboxIdx);
 
             vkCmdDraw(cmd, 36, 1, 0, 0);

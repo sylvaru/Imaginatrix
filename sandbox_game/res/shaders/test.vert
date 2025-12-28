@@ -1,6 +1,6 @@
+// forward_pass.vert
 #version 450
 #extension GL_KHR_vulkan_glsl : enable
-
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inTexCoord;
@@ -17,29 +17,31 @@ layout(set = 0, binding = 0) uniform GlobalUbo
     float time;
     float deltaTime;
     float skyboxIntensity;
+    float _padding;
 } ubo;
 
-struct InstanceData {
+struct InstanceData 
+{
     mat4 modelMatrix;
     uint textureIndex;
     float boundingRadius;
-    uint _pad0;
-    uint _pad1;
+    uint batchID;
+    uint _padding;
 };
 
-// Set 2: The Instance Database (Uploaded contiguously by Mesh)
-layout(std430, set = 2, binding = 0) readonly buffer InstanceBuffer {
+layout(std430, set = 2, binding = 0) readonly buffer InstanceBuffer 
+{
     InstanceData instances[];
 } instanceData;
 
 void main() 
 {
-    // gl_InstanceIndex is automatically offset by the 'firstInstance' 
-    // parameter provided in vkCmdDrawIndexed.
+
     uint index = gl_InstanceIndex;
     
-    mat4 model = instanceData.instances[index].modelMatrix;
-    outTextureIndex = instanceData.instances[index].textureIndex;
+    InstanceData inst = instanceData.instances[index];
+    mat4 model = inst.modelMatrix;
+    outTextureIndex = inst.textureIndex;
 
     gl_Position = ubo.projection * ubo.view * model * vec4(inPosition, 1.0);
     fragUV = inTexCoord;

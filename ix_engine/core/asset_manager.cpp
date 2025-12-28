@@ -69,6 +69,7 @@ namespace ix
         if (mesh) {
             AssetHandle handle = m_nextMeshHandle++;
 
+            m_meshRadii[handle] = mesh->boundingRadius;
             m_meshes[handle] = std::move(mesh);
             m_pathMap[name] = handle;
             return handle;
@@ -155,12 +156,23 @@ namespace ix
 
         // Fill Vertex Array 
         vertices.resize(posAccessor.count);
+        float maxDistSq = 0.0f;
+
         for (size_t i = 0; i < posAccessor.count; ++i) {
             vertices[i].pos = { posData[i * 3], posData[i * 3 + 1], posData[i * 3 + 2] };
+
+            // Track the furthest vertex from the origin (0,0,0)
+            float distSq = vertices[i].pos.x * vertices[i].pos.x +
+                vertices[i].pos.y * vertices[i].pos.y +
+                vertices[i].pos.z * vertices[i].pos.z;
+            if (distSq > maxDistSq) maxDistSq = distSq;
+
             vertices[i].uv = uvData ? glm::vec2(uvData[i * 2], uvData[i * 2 + 1]) : glm::vec2(0.0f);
             vertices[i].normal = glm::vec3(0.0f, 1.0f, 0.0f);
             vertices[i].color = glm::vec4(1.0f);
         }
+
+        float meshRadius = std::sqrt(maxDistSq);
 
         // Index Data 
         const auto& idxAccessor = model.accessors[primitive.indices];
@@ -183,6 +195,7 @@ namespace ix
         auto gpuMesh = std::make_unique<VulkanMesh>();
         gpuMesh->vertexBuffer = nullptr;
         gpuMesh->indexBuffer = nullptr;
+        gpuMesh->boundingRadius = meshRadius;
         gpuMesh->vertexCount = static_cast<uint32_t>(vertices.size());
         gpuMesh->indexCount = static_cast<uint32_t>(indices.size());
 
@@ -310,6 +323,11 @@ namespace ix
     uint32_t AssetManager::getHDRSourceBindlessIndex(TextureHandle handle) 
     {
         return m_hdrSourceBindlessSlots.count(handle) ? m_hdrSourceBindlessSlots[handle] : 0;
+    }
+
+    float AssetManager::getMeshBoundingRadius(AssetHandle handle) 
+    {
+        return m_meshRadii.count(handle) ? m_meshRadii[handle] : 1.0f;
     }
 
     VulkanImage* AssetManager::getTexture(TextureHandle handle)
