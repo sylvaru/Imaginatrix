@@ -45,10 +45,13 @@ namespace ix
         pcs.viewProj = state.view.projectionMatrix * state.view.viewMatrix;
         pcs.maxInstances = state.frame.instanceCount;
         pcs.debugCulling = true; // toggle debug culling
+        for (size_t i = 0; i < state.frame.renderBatches->size() && i < 16; ++i) 
+        {
+            pcs.batchOffsets[i] = (*state.frame.renderBatches)[i].firstInstance;
+        }
 
         vkCmdPushConstants(cmd, m_cachedPipeline->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT,
             0, sizeof(CullingPushConstants), &pcs);
-
         // Dispatch
         uint32_t groupCount = (state.frame.instanceCount + 63) / 64;
         vkCmdDispatch(cmd, groupCount, 1, 1);

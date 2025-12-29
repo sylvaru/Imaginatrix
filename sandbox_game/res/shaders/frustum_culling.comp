@@ -1,13 +1,12 @@
-// frustum_culling.comp
 #version 450
 layout(local_size_x = 64) in;
-
 
 layout(push_constant) uniform PushConstants 
 {
     mat4 viewProj;
     uint maxInstances;
     uint debugCulling;
+    uint batchOffsets[16]; 
 } pcs;
 
 struct InstanceData 
@@ -34,25 +33,22 @@ layout(std430, set = 2, binding = 0) readonly buffer InputBuffer
     InstanceData instances[];
 } inputData;
 
-
 layout(std430, set = 2, binding = 1) buffer OutputBuffer 
 {
     GPUIndirectCommand commands[]; 
 } culledData;
 
-layout(std430, set = 2, binding = 1) buffer InstanceOutputBuffer 
+layout(std430, set = 2, binding = 2) buffer InstanceOutputBuffer 
 {
-    layout(offset = 1024) InstanceData instances[]; 
+    InstanceData instances[]; 
 } culledInstances;
 
 
 bool isVisible(vec3 worldPos, float radius) 
 {
     vec4 clipPos = pcs.viewProj * vec4(worldPos, 1.0);
+    float debugScale = (pcs.debugCulling == 1) ? 0.5 : 1.0; // Dynamic Debug Scale
 
-    // Dynamic Debug Scale
-    float debugScale = (pcs.debugCulling == 1) ? 0.5 : 1.0;
-    
     // Calculate the acceptance limit in clip space.
     // Adding radius ensures that if any part of the sphere touches the frustum, it stays.
     float limit = (clipPos.w * debugScale) + radius;
@@ -68,30 +64,25 @@ bool isVisible(vec3 worldPos, float radius)
     return true;
 }
 
-void main() {
+void main() 
+{
     uint gIdx = gl_GlobalInvocationID.x;
     if (gIdx >= pcs.maxInstances) return;
 
-    // Only fetch what we need for the test
-    // Read only the 4th column (index 3) of the matrix and the radius.
-    // This avoids pulling the other 3 columns into GPU registers unnecessarily.
-    vec3 worldPos = inputData.instances[gIdx].modelMatrix[3].xyz;
-    float radius  = inputData.instances[gIdx].boundingRadius;
+    InstanceData instance = inputData.instances[gIdx];
+    vec3 worldPos = instance.modelMatrix[3].xyz;
+    float radius  = instance.boundingRadius;
 
     if (isVisible(worldPos, radius)) 
     {
-        // Now that we know it's visible, fetch the metadata
-        uint bID = inputData.instances[gIdx].batchID;
+        uint bID = instance.batchID;
         
-        // Atomic increment to find our slot in the specific batch
+        // Atomic increment for the draw command (instanceCount)
         uint localIdx = atomicAdd(culledData.commands[bID].instanceCount, 1);
         
         // Calculate global destination index based on the batch's starting offset
-        uint globalDestIdx = culledData.commands[bID].firstInstance + localIdx;
+        uint globalDestIdx = pcs.batchOffsets[bID] + localIdx;
         
-        // Heavy load happens only for visible objects
-        culledInstances.instances[globalDestIdx] = inputData.instances[gIdx];
+        culledInstances.instances[globalDestIdx] = instance;
     }
 }
-
-

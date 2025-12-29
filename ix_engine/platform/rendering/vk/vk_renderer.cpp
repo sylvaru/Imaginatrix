@@ -89,7 +89,7 @@ namespace ix
 			VMA_MEMORY_USAGE_GPU_ONLY
 		);
 
-		// Initialize Bindless Textures (Static Set)
+		// Initialize Bindless Textures
 		m_bindlessPool = m_descriptorManagers[0]->createBindlessPool(1, 1000);
 		m_descriptorManagers[0]->allocateBindless(m_bindlessPool, &m_bindlessDescriptorSet, m_bindlessLayout, 1000);
 
@@ -101,39 +101,47 @@ namespace ix
 			auto& sets = m_frameDescriptorSets[i];
 			auto& mgr = m_descriptorManagers[i];
 
-			// Set 0: Global UBO
+			// Set 0: Global UBO (Binding 0)
 			mgr->allocate(&sets.globalSet, m_globalDescriptorLayout);
 			auto uboInfo = m_globalUboBuffers[i]->descriptorInfo();
-
 			DescriptorWriter()
 				.writeBuffer(0, &uboInfo, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 				.updateSet(*m_context, sets.globalSet);
 
-			// Set 2 (Forward): Culled Instances
+			// Set 2 (Forward)
 			mgr->allocate(&sets.instanceSet, m_instanceDescriptorLayout);
-
 			VkDescriptorBufferInfo culledDataInfo = m_culledInstanceBuffer->descriptorInfo();
-			culledDataInfo.offset = commandHeaderSize;
+			culledDataInfo.offset = commandHeaderSize; // The 1024 offset
 			culledDataInfo.range = VK_WHOLE_SIZE;
 
 			DescriptorWriter()
-				.writeBuffer(0, &culledDataInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+				.writeBuffer(2, &culledDataInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
 				.updateSet(*m_context, sets.instanceSet);
 
-			// Set 2 (Compute): Culling Input/Output
+			// Set 2 (Compute)
 			mgr->allocate(&sets.cullingSet, m_cullingDescriptorLayout);
-
 			auto inputDbInfo = m_instanceBuffer->descriptorInfo();
-			auto outputFullInfo = m_culledInstanceBuffer->descriptorInfo();
+
+			// Binding 1 (Commands)
+			VkDescriptorBufferInfo cmdInfo = m_culledInstanceBuffer->descriptorInfo();
+			cmdInfo.offset = 0;
+			cmdInfo.range = commandHeaderSize;
+
+			// Binding 2 (CulledInstances)
+			VkDescriptorBufferInfo culledOutInfo = m_culledInstanceBuffer->descriptorInfo();
+			culledOutInfo.offset = commandHeaderSize;
+			culledOutInfo.range = VK_WHOLE_SIZE;
 
 			DescriptorWriter()
-				.writeBuffer(0, &inputDbInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-				.writeBuffer(1, &outputFullInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+				.writeBuffer(0, &inputDbInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)   // Binding 0
+				.writeBuffer(1, &cmdInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)       // Binding 1
+				.writeBuffer(2, &culledOutInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) // Binding 2
 				.updateSet(*m_context, sets.cullingSet);
 		}
 
 		spdlog::info("Vulkan Renderer: Initialized. Descriptors baked for {} frames.", MAX_FRAMES_IN_FLIGHT);
 	}
+
 	void VulkanRenderer::compileRenderGraph()
 	{
 		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
@@ -205,7 +213,7 @@ namespace ix
 			cmd.instanceCount = 0;
 			cmd.firstIndex = 0;
 			cmd.vertexOffset = 0;
-			cmd.firstInstance = batch.firstInstance;
+			cmd.firstInstance = 0;
 			resetCmds.push_back(cmd);
 		}
 
@@ -568,17 +576,15 @@ namespace ix
 		vkCreateDescriptorSetLayout(m_context->device(), &bindlessCI, nullptr, &m_bindlessLayout);
 
 		// Set 2: Graphics Instance Data
-		VkDescriptorSetLayoutBinding instBinding = { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr };
-		VkDescriptorSetLayoutCreateInfo instCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-		instCI.bindingCount = 1;
-		instCI.pBindings = &instBinding;
+		VkDescriptorSetLayoutBinding instBinding = { 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr };
+		VkDescriptorSetLayoutCreateInfo instCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, 0, 1, &instBinding };
 		vkCreateDescriptorSetLayout(m_context->device(), &instCI, nullptr, &m_instanceDescriptorLayout);
 
 		// Set 2: Culling Storage (Input + Output)
-		std::vector<VkDescriptorSetLayoutBinding> cullBindings = 
-		{
-			{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr },
-			{ 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }
+		std::vector<VkDescriptorSetLayoutBinding> cullBindings = {
+			{ 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }, // Input
+			{ 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }, // Commands
+			{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT, nullptr }
 		};
 		VkDescriptorSetLayoutCreateInfo cullLayoutCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
 		cullLayoutCI.bindingCount = static_cast<uint32_t>(cullBindings.size());
@@ -592,48 +598,50 @@ namespace ix
 		storageImgCI.pBindings = &storageImgBinding;
 		vkCreateDescriptorSetLayout(m_context->device(), &storageImgCI, nullptr, &m_computeStorageLayout);
 
+
 		// Push constant ranges
-		uint32_t pushSize = sizeof(CullingPushConstants);
+		// Graphics only (Vertex/Fragment)
+		VkPushConstantRange graphicsRange{};
+		graphicsRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		graphicsRange.offset = 0;
+		graphicsRange.size = sizeof(CullingPushConstants); 
 
-		VkPushConstantRange graphicsPushRange{};
-		graphicsPushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		graphicsPushRange.offset = 0;
-		graphicsPushRange.size = pushSize;
+		// Compute only
+		VkPushConstantRange computeRange{};
+		computeRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		computeRange.offset = 0;
+		computeRange.size = sizeof(CullingPushConstants);
 
-		VkPushConstantRange computePushRange{};
-		computePushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		computePushRange.offset = 0;
-		computePushRange.size = pushSize;
-
-		// Graphics layout
+		// Graphics Layout
 		std::vector<VkDescriptorSetLayout> gSets = { m_globalDescriptorLayout, m_bindlessLayout, m_instanceDescriptorLayout };
 		VkPipelineLayoutCreateInfo gLayoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 		gLayoutCI.setLayoutCount = (uint32_t)gSets.size();
 		gLayoutCI.pSetLayouts = gSets.data();
 		gLayoutCI.pushConstantRangeCount = 1;
-		gLayoutCI.pPushConstantRanges = &graphicsPushRange;
+		gLayoutCI.pPushConstantRanges = &graphicsRange; // Uses VERTEX | FRAGMENT
 		vkCreatePipelineLayout(m_context->device(), &gLayoutCI, nullptr, &m_graphicsPipelineLayout);
 
-		// Culling compute layout
+		// Culling Layout
 		std::vector<VkDescriptorSetLayout> cullingSets = { m_globalDescriptorLayout, m_bindlessLayout, m_cullingDescriptorLayout };
 		VkPipelineLayoutCreateInfo cullingCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
 		cullingCI.setLayoutCount = (uint32_t)cullingSets.size();
 		cullingCI.pSetLayouts = cullingSets.data();
 		cullingCI.pushConstantRangeCount = 1;
-		cullingCI.pPushConstantRanges = &computePushRange; // specialized for compute
+		cullingCI.pPushConstantRanges = &computeRange; // Uses COMPUTE only
+		vkCreatePipelineLayout(m_context->device(), &cullingCI, nullptr, &m_cullingPipelineLayout);
 
-		if (vkCreatePipelineLayout(m_context->device(), &cullingCI, nullptr, &m_cullingPipelineLayout) != VK_SUCCESS) {
-			throw std::runtime_error("Failed to create culling pipeline layout!");
-		}
+		// General Compute Layout
+		std::vector<VkDescriptorSetLayout> computeSets = {
+			m_globalDescriptorLayout,
+			m_bindlessLayout,
+			m_computeStorageLayout
+		};
 
-		// General compute layout
-		std::vector<VkDescriptorSetLayout> computeSets = { m_globalDescriptorLayout, m_bindlessLayout, m_computeStorageLayout };
 		VkPipelineLayoutCreateInfo compLayoutCI{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-		compLayoutCI.setLayoutCount = (uint32_t)computeSets.size();
+		compLayoutCI.setLayoutCount = static_cast<uint32_t>(computeSets.size());
 		compLayoutCI.pSetLayouts = computeSets.data();
-		compLayoutCI.pushConstantRangeCount = 1;
-
-		compLayoutCI.pPushConstantRanges = &computePushRange;
+		compLayoutCI.pushConstantRangeCount = 1; 
+		compLayoutCI.pPushConstantRanges = &computeRange;
 
 		if (vkCreatePipelineLayout(m_context->device(), &compLayoutCI, nullptr, &m_computePipelineLayout) != VK_SUCCESS) {
 			throw std::runtime_error("Failed to create general compute pipeline layout!");

@@ -23,7 +23,7 @@
         {
             "name": "TexturedQuad",
             "transform": {
-                "pos": [ -20, 0, 0 ],
+                "pos": [ 0, 0, 0 ],
                 "rot": [ 0, 0, 0 ],
                 "scale": [ 2, 2, 2 ]
             },

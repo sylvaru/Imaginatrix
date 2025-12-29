@@ -32,29 +32,37 @@ namespace ix
 
     struct GPUIndirectCommand
     {
-        uint32_t indexCount;    // Set to your mesh index count (e.g., 6 for quad)
-        uint32_t instanceCount; // Reset to 0, incremented by Compute Shader
-        uint32_t firstIndex;    // 0
-        int32_t  vertexOffset;  // 0
-        uint32_t firstInstance; // 0
-        uint32_t _padding[11];  // Padding to align the NEXT data to a 64-byte boundary
+        uint32_t indexCount;      // 4 bytes  - Number of indices to draw
+        uint32_t instanceCount;   // 4 bytes  - Number of instances to draw (updated by Compute)
+        uint32_t firstIndex;      // 4 bytes  - First index in the index buffer
+        int32_t  vertexOffset;    // 4 bytes  - Value added to each index before addressing vertex buffer
+        uint32_t firstInstance;   // 4 bytes  - Instance index for the first instance drawn (0 in our setup)
+        uint32_t _padding[11];    // 44 bytes - Pad to 64 bytes total for alignment and batch-indexing
+
+        // Total: 64 bytes
+        // This padding ensures that each command in a buffer is 64-byte aligned, 
+        // matching the stride used in vkCmdDrawIndexedIndirect and GLSL culledData.
+    };
+
+    struct alignas(16) GPUInstanceData 
+    {
+        glm::mat4 modelMatrix;    // 64 bytes
+        uint32_t  textureIndex;   // 4 bytes
+        float     boundingRadius; // 4 bytes
+        uint32_t  batchID;        // 4 bytes
+        uint32_t  _padding;       // 4 bytes (Makes struct 80 bytes total)
     };
 
     struct CullingPushConstants
     {
-        glm::mat4 viewProj;     // 64 bytes - The Camera's Frustum
-        uint32_t maxInstances;  // 4 bytes  - Total instances in the scene
-        uint32_t debugCulling;
-        uint32_t _pad[2];       // 12 bytes - Rounds total to 80 bytes
+        glm::mat4 viewProj;          // 64 bytes - Camera View-Projection matrix
+        uint32_t  maxInstances;      // 4 bytes  - Total instances to process
+        uint32_t  debugCulling;      // 4 bytes  - Toggle for culling visualization
+        uint32_t  batchOffsets[16];  // 64 bytes - Start index for each batch in output
+        // Total: 136 bytes 
     };
 
-    struct GPUInstanceData {
-        glm::mat4 modelMatrix;   // 64 bytes
-        uint32_t  textureIndex;  // 4 bytes
-        float     boundingRadius;// 4 bytes
-        uint32_t  batchID;       // 4 bytes
-        uint32_t  _padding;      // 4 bytes
-    };
+
     struct RenderBatch
     {
         MeshHandle meshHandle;
