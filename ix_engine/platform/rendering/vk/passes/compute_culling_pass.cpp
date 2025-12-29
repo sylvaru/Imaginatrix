@@ -44,7 +44,7 @@ namespace ix
         CullingPushConstants pcs;
         pcs.viewProj = state.view.projectionMatrix * state.view.viewMatrix;
         pcs.maxInstances = state.frame.instanceCount;
-        pcs.debugCulling = false; // toggle debug culling
+        pcs.debugCulling = true; // toggle debug culling
 
         vkCmdPushConstants(cmd, m_cachedPipeline->getLayout(), VK_SHADER_STAGE_COMPUTE_BIT,
             0, sizeof(CullingPushConstants), &pcs);

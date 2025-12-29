@@ -41,10 +41,13 @@ namespace ix
 		static AssetManager& getAssetManager() { return AssetManager::get(); }
 		Renderer_I& getRenderer() { return *m_renderer; }
 		Input_I& getInput() { return m_input; }
+		Window_I& getWindow() { return m_window; }
+		float getFPS() const { return m_lastFrameFPS; }
 
 		void setupInputCallbacks();
 		void processInput();
 		void toggleCursorLock();
+
 	private:
 		void shutdown();
 		static Engine* s_instance;
@@ -55,6 +58,10 @@ namespace ix
 		Input_I& m_input;
 
 		bool m_cursorLocked = true;
+
+		float  m_lastFrameFPS = 0.0f;
+		float  m_smoothedFPS = 0.0f; // High-frequency average
+		double m_fpsTimer = 0.0;
 
 	};
 }

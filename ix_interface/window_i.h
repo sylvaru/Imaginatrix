@@ -35,6 +35,7 @@ namespace ix
         virtual void consumeMouseDelta(double& dx, double& dy) = 0;
         virtual bool wasWindowResized() const = 0;
         virtual void resetWindowResizedFlag() = 0;
+        virtual void setWindowResizedFlag(bool wasResized) = 0;
         virtual void waitEvents() = 0;
     };
 }

@@ -23,6 +23,7 @@ target_include_directories(vma INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/VMA/include"
 )
 
+
 # ==========================================================
 # spdlog (Logging)
 # ==========================================================
@@ -74,5 +75,34 @@ target_include_directories(tinygltf INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/tinyg
 # ==========================================================
 add_library(entt INTERFACE)
 target_include_directories(entt INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/entt/src")
+
+# ==========================================================
+# ImGui
+# ==========================================================
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/imgui")
+
+add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    # Backends
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+target_include_directories(imgui PUBLIC 
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+
+
+
+# ImGui backends need access to GLFW and Vulkan headers
+target_link_libraries(imgui PUBLIC 
+    glfw 
+    vulkan_i
+)
 
 

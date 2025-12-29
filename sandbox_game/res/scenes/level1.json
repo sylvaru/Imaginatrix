@@ -23,22 +23,12 @@
         {
             "name": "TexturedQuad",
             "transform": {
-                "pos": [ 0, 0, 0 ],
+                "pos": [ -20, 0, 0 ],
                 "rot": [ 0, 0, 0 ],
                 "scale": [ 2, 2, 2 ]
             },
             "mesh": "plane.gltf",
             "texture": "wood_floor.jpg"
-        },
-        {
-            "name": "Sphere",
-            "transform": {
-                "pos": [ 0, 3, 0 ],
-                "rot": [ 0, 0, 0 ],
-                "scale": [ 2, 2, 2 ]
-            },
-            "mesh": "sphere.gltf",
-            "texture": "stone_surface.jpg"
         }
     ]
 }

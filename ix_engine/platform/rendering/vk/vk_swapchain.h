@@ -18,7 +18,7 @@ namespace ix
     class VulkanSwapchain 
     {
     public:
-        VulkanSwapchain(VulkanContext& context, VkExtent2D extent, VulkanSwapchain* old = nullptr);
+        VulkanSwapchain(VulkanContext& context, VkExtent2D extent, VulkanSwapchain* old = nullptr, bool vSync = true);
         ~VulkanSwapchain();
 
         // Delete copy/move
@@ -38,7 +38,7 @@ namespace ix
         VkResult acquireNextImage(VkSemaphore signalSemaphore, uint32_t* imageIndex);
 
     private:
-        void create(VkSwapchainKHR oldHandle);
+        void create(VkSwapchainKHR oldHandle, bool vSync);
 
         // Selection helpers
         VkSurfaceFormatKHR chooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);

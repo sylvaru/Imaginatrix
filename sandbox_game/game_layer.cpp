@@ -34,20 +34,29 @@ void GameLayer::onAttach()
     auto& scene = SceneManager::getActiveScene();
     auto& assetManager = AssetManager::get();
 
-    AssetHandle meshHandle = assetManager.loadModel("plane.gltf");
-    TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
+    AssetHandle meshHandle = assetManager.loadModel("sphere.gltf");
 
-    // 50 * 50 = 2,500 entities
-    for (int x = -25; x < 25; x++) {
-        for (int z = -25; z < 25; z++) {
-            auto entity = scene.createEntity("Floor_Instance");
+    for (int x = -10; x < 10; x++)
+    {
+        for (int y = 0; y < 6; y++)
+        {
+            for (int z = -10; z < 10; z++)
+            {
+                auto entity = scene.createEntity("SphereInstance");
+                auto& tc = entity.addComponent<TransformComponent>();
 
-            auto& tc = entity.addComponent<TransformComponent>();
+                tc.position =
+                {
+                    static_cast<float>(x) * 10.0f,
+                    static_cast<float>(y) * 10.0f,
+                    static_cast<float>(z) * 10.0f
+                };
 
-            tc.position = { (float)x * 60.0f, -2.0f, (float)z * 60.0f };
-            tc.scale = { 5.0f, 5.0f, 5.0f };
+                tc.scale = { 1.f, 1.f, 1.f};
 
-            entity.addComponent<MeshComponent>(meshHandle, texHandle);
+                entity.addComponent<MeshComponent>(meshHandle);
+            }
+
         }
     }
 }

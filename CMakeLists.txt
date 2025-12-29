@@ -15,12 +15,14 @@ option(IMAGINATRIX_BUILD_SHARED "Build libraries as shared" OFF)
 # Platform-specific flags
 # ----------------------------
 if(MSVC)
-    # Dynamic CRT for hot reload if you want /MD /MDd
+    # Dynamic CRT for hot reload /MD /MDd
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    add_compile_options(/W4)
+    add_compile_options(/W4 $<$<CONFIG:Debug>:/ZI>)
+    add_link_options($<$<CONFIG:Debug>:/INCREMENTAL>)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
+
 
 # ----------------------------
 # Output dirs
@@ -48,6 +50,7 @@ add_subdirectory(ix_external)
 add_subdirectory(ix_interface)
 add_subdirectory(ix_engine)
 add_subdirectory(sandbox_game)
+
 
 # ----------------------------
 # Shader compilation

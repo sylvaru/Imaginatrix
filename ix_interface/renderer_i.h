@@ -51,5 +51,8 @@ namespace ix
         virtual VulkanSwapchain* getSwapchain() = 0;
         virtual uint32_t getCurrentImageIndex() const = 0;
 
+        // Misc
+        virtual void setupImGui() {}
+
     };
 }

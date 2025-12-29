@@ -53,19 +53,31 @@ namespace ix
 		using clock = std::chrono::high_resolution_clock;
 		auto lastTime = clock::now();
 		double accumulator = 0.0;
-
-		// Fixed delta time
-		const double dt = 1.0 / 500.0;
+		const double dt = 1.0 / 144.0; // Fixed delta time
 
 		while (!m_window.isWindowShouldClose())
 		{
 			auto currentTime = clock::now();
 			double frameTime = std::chrono::duration<double>(currentTime - lastTime).count();
-
-			if (frameTime > 0.25) frameTime = 0.25; // prevents spiral
-
 			lastTime = currentTime;
+			if (frameTime > 0.25) frameTime = 0.25; // prevents spiral
 			accumulator += frameTime;
+
+			if (frameTime > 0.0)
+			{
+				float currentFPS = static_cast<float>(1.0 / frameTime);
+
+				// Smooth the internal value constantly
+				m_smoothedFPS = (m_smoothedFPS * 0.99f) + (currentFPS * 0.01f);
+
+				// Only update the 'display' FPS member every 0.5 seconds
+				m_fpsTimer += frameTime;
+				if (m_fpsTimer >= 0.5)
+				{
+					m_lastFrameFPS = m_smoothedFPS;
+					m_fpsTimer = 0.0;
+				}
+			}
 
 			m_window.pollEvents();
 

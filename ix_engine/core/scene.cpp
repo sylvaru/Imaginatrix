@@ -51,17 +51,22 @@ namespace ix
 
             glm::vec3 moveDir{ 0.0f };
 
-            if (input.isKeyPressed(IxKey::W)) moveDir += transform.getForward();
-            if (input.isKeyPressed(IxKey::S)) moveDir -= transform.getForward();
-            if (input.isKeyPressed(IxKey::A)) moveDir -= transform.getRight();
-            if (input.isKeyPressed(IxKey::D)) moveDir += transform.getRight();
+            if (input.isCursorLocked() == true)
+            {
+                if (input.isKeyPressed(IxKey::W)) moveDir += transform.getForward();
+                if (input.isKeyPressed(IxKey::S)) moveDir -= transform.getForward();
+                if (input.isKeyPressed(IxKey::A)) moveDir -= transform.getRight();
+                if (input.isKeyPressed(IxKey::D)) moveDir += transform.getRight();
 
-            if (input.isKeyPressed(IxKey::SPACE)) {
-                moveDir += glm::vec3(0.0f, 1.0f, 0.0f);
+                if (input.isKeyPressed(IxKey::SPACE)) {
+                    moveDir += glm::vec3(0.0f, 1.0f, 0.0f);
+                }
+                if (input.isKeyPressed(IxKey::LEFT_CONTROL)) {
+                    moveDir += glm::vec3(0.0f, -1.0f, 0.0f);
+                }
             }
-            if (input.isKeyPressed(IxKey::LEFT_CONTROL)) {
-                moveDir += glm::vec3(0.0f, -1.0f, 0.0f);
-            }
+
+         
 
             if (glm::length(moveDir) > 0.001f) {
                 transform.position += glm::normalize(moveDir) * currentSpeed * dt;

@@ -14,6 +14,7 @@ namespace ix
 
     GlfwPlatform::~GlfwPlatform()
     {
+
         if (m_window) {
             glfwDestroyWindow(m_window);
             m_window = nullptr;

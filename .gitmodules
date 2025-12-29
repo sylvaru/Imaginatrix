@@ -25,3 +25,6 @@
 [submodule "ix_external/VMA"]
 	path = ix_external/VMA
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "ix_external/imgui"]
+	path = ix_external/imgui
+	url = https://github.com/ocornut/imgui.git

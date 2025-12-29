@@ -23,8 +23,9 @@ namespace ix
         void requestWindowClose() override;
         void getFramebufferSize(int& width, int& height) const override;
 
-        bool wasWindowResized() const { return m_framebufferResized; }
-        void resetWindowResizedFlag() { m_framebufferResized = false; }
+        bool wasWindowResized() const override { return m_framebufferResized; }
+        void resetWindowResizedFlag() override { m_framebufferResized = false; }
+        void setWindowResizedFlag(bool wasResized) override { m_framebufferResized = wasResized; }
 
         void setUserPointer(void* ptr) override;
         void* getWindowUserPointer() const override;

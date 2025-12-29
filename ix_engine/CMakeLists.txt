@@ -49,7 +49,8 @@ add_library(ix_engine STATIC
     platform/rendering/vk/passes/compute_culling_pass.cpp
     platform/rendering/vk/passes/skybox_pass.h
     platform/rendering/vk/passes/skybox_pass.cpp
-
+    platform/rendering/vk/passes/imgui_pass.h
+    platform/rendering/vk/passes/imgui_pass.cpp
 
     # Core
     core/asset_manager.h
@@ -58,12 +59,14 @@ add_library(ix_engine STATIC
     core/scene.cpp
     core/scene_manager.h
     core/scene_manager.cpp
+    core/layers/imgui_layer.h
+    core/layers/imgui_layer.cpp
     core/entity.h
     core/components.h
 
     engine.h
     engine.cpp
-  )
+    )
 
 target_precompile_headers(ix_engine
     PRIVATE
@@ -87,6 +90,7 @@ target_link_libraries(ix_engine
         spdlog::spdlog_header_only
         vulkan_i
         vma
+        imgui
     PRIVATE 
         glfw
         stb

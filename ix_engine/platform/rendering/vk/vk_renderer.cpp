@@ -17,10 +17,18 @@
 #include "platform/rendering/vk/passes/skybox_pass.h"
 #include "platform/rendering/vk/passes/equirect_to_cube_pass.h"
 #include "platform/rendering/vk/passes/compute_culling_pass.h"
+#include "platform/rendering/vk/passes/imgui_pass.h"
+
 
 #include "core/asset_manager.h"
 #include "core/scene_manager.h"
 #include "core/components.h"
+
+
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+#include <imgui_impl_glfw.h>
+
 
 namespace ix
 {
@@ -132,6 +140,7 @@ namespace ix
 		auto equirectToCubePass = std::make_unique<EquirectToCubemapPass>("ComputePass");
 		auto computeCullingPass = std::make_unique<ComputeCullingPass>("ComputeCulling");
 		auto skyboxPass = std::make_unique<SkyboxPass>("SkyboxPass");
+		auto imguiPass = std::make_unique<ImGuiPass>("ImGuiPass");
 
 		m_renderGraphCompileConfig.context = m_context.get();
 		m_renderGraphCompileConfig.pipelineManager = m_pipelineManager.get();
@@ -143,11 +152,19 @@ namespace ix
 		m_renderGraph->addPass(std::move(forwardPass));
 		m_renderGraph->addPass(std::move(equirectToCubePass));
 		m_renderGraph->addPass(std::move(skyboxPass));
+		m_renderGraph->addPass(std::move(imguiPass));
 		m_renderGraph->compile(m_renderGraphCompileConfig);
 	}
 	
 	bool VulkanRenderer::beginFrame(FrameContext& ctx, const SceneView& view)
 	{
+
+		if (m_window.wasWindowResized() || m_needsSwapchainRecreation)
+		{
+			recreateSwapchain();
+			m_window.setWindowResizedFlag(false);
+			return false;
+		}
 		FrameData& frame = getCurrentFrame();
 
 		// Synchronize: Wait for GPU to finish this frame's previous iteration
@@ -156,7 +173,8 @@ namespace ix
 		// Acquire Image
 		uint32_t imageIndex;
 		VkResult result = m_swapchain->acquireNextImage(frame.imageAvailableSemapohore, &imageIndex);
-		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+		{
 			recreateSwapchain();
 			return false;
 		}
@@ -625,7 +643,7 @@ namespace ix
 
 	void VulkanRenderer::recreateSwapchain()
 	{
-		spdlog::info("Recreating Swapchain...");
+		spdlog::info("Recreating Swapchain (VSync: {})...", m_vsync ? "ON" : "OFF");
 		waitIdle();
 
 		int w, h;
@@ -639,7 +657,8 @@ namespace ix
 		auto newSwapchain = std::make_unique<VulkanSwapchain>(
 			*m_context,
 			VkExtent2D{ static_cast<uint32_t>(w), static_cast<uint32_t>(h) },
-			m_swapchain.get()
+			m_swapchain.get(),
+			m_vsync
 		);
 
 		// Set the new swapchain as current
@@ -669,6 +688,7 @@ namespace ix
 
 			m_renderGraph->compile(m_renderGraphCompileConfig);
 		}
+		m_needsSwapchainRecreation = false;
 		spdlog::info("Recreating Swapchain: Finished successfully");
 
 	}
@@ -722,30 +742,81 @@ namespace ix
 		vkDeviceWaitIdle(m_context->device());
 	}
 
+	void VulkanRenderer::setupImGui()
+	{
+		if (m_imguiPool == VK_NULL_HANDLE) 
+		{
+			VkDescriptorPoolSize pool_sizes[] = {
+				{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 }
+			};
+			VkDescriptorPoolCreateInfo pool_info = {};
+			pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+			pool_info.maxSets = 100;
+			pool_info.poolSizeCount = std::size(pool_sizes);
+			pool_info.pPoolSizes = pool_sizes;
+			vkCreateDescriptorPool(m_context->device(), &pool_info, nullptr, &m_imguiPool);
+		}
+
+		// Initialize ImGui Vulkan Implementation
+		ImGui_ImplVulkan_InitInfo init_info = {};
+		init_info.Instance = m_instance->get();
+		init_info.PhysicalDevice = m_context->physicalDevice();
+		init_info.Device = m_context->device();
+		init_info.QueueFamily = m_context->getGraphicsFamily();
+		init_info.Queue = m_context->graphicsQueue();
+		init_info.DescriptorPool = m_imguiPool;
+		init_info.MinImageCount = m_swapchain->getImageCount();
+		init_info.ImageCount = m_swapchain->getImageCount();
+		init_info.UseDynamicRendering = true;
+
+		VkFormat swapchainFormat = m_swapchain->getFormat();
+		init_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+		init_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+		init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &swapchainFormat;
+
+		ImGui_ImplVulkan_Init(&init_info);
+
+
+	}
+
 
 	void VulkanRenderer::shutdown()
 	{
 		if (!m_context) return;
 
-		if (m_pipelineManager) {
+		// Shutdown imgui
+		ImGui_ImplGlfw_Shutdown();
+		ImGui_ImplVulkan_Shutdown();
+		ImGui::DestroyContext();
+		if (m_imguiPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(m_context->device(), m_imguiPool, nullptr);
+		
+
+		// Cleanup / reset owned resources
+		if (m_pipelineManager) 
+		{
 			m_pipelineManager->clearCache();
 			m_pipelineManager.reset();
 		}
 
-		if (m_graphicsPipelineLayout != VK_NULL_HANDLE) {
+		if (m_graphicsPipelineLayout != VK_NULL_HANDLE) 
+		{
 			vkDestroyPipelineLayout(m_context->device(), m_graphicsPipelineLayout, nullptr);
 			m_graphicsPipelineLayout = VK_NULL_HANDLE;
 		}
-		if (m_computePipelineLayout != VK_NULL_HANDLE) {
+		if (m_computePipelineLayout != VK_NULL_HANDLE) 
+		{
 			vkDestroyPipelineLayout(m_context->device(), m_computePipelineLayout, nullptr);
 			m_computePipelineLayout = VK_NULL_HANDLE;
 		}
-		if (m_cullingPipelineLayout != VK_NULL_HANDLE) {
+		if (m_cullingPipelineLayout != VK_NULL_HANDLE) 
+		{
 			vkDestroyPipelineLayout(m_context->device(), m_cullingPipelineLayout, nullptr);
 			m_cullingPipelineLayout = VK_NULL_HANDLE;
 		}
 
-		if (m_renderGraph) {
+		if (m_renderGraph) 
+		{
 			m_renderGraph->clearExternalResources();
 			m_renderGraph.reset();
 		}

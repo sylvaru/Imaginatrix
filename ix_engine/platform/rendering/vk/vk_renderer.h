@@ -3,7 +3,7 @@
 #include "renderer_i.h"
 #include <vulkan/vulkan.h>
 #include <memory>
-#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>    
 
 #include "global_common/ix_global_pods.h"
 #include "global_common/ix_event_pods.h"
@@ -36,11 +36,21 @@ namespace ix
         void loadPipelines(const nlohmann::json& json) override;
         void compileRenderGraph() override;
         void render(const FrameContext& ctx, const SceneView& view) override;
+        void setupImGui() override;
 
         // Misc
         void updateGlobalUbo(const SceneView& view);
         void updateBindlessTextures(uint32_t slot, VkDescriptorImageInfo& imageInfo);
         void updateBindlessTextures(const std::vector<BindlessUpdateRequest>& updates);
+        void setVsync(bool enabled) 
+        {
+            if (m_vsync != enabled) 
+            {
+                m_vsync = enabled;
+                m_needsSwapchainRecreation = true;
+            }
+        }
+        bool isVsyncEnabled() const { return m_vsync; }
 
         // Getters
         void* getAPIContext() override { return m_context.get(); }
@@ -69,7 +79,7 @@ namespace ix
         std::unique_ptr<RenderGraph> m_renderGraph;
         RenderGraphCompileConfig m_renderGraphCompileConfig;
 
-        // xecution & Synchronization
+        // Execution & Synchronization
         static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
         FrameData m_frames[MAX_FRAMES_IN_FLIGHT]{};
         int       m_currentFrameIndex = 0;
@@ -102,7 +112,6 @@ namespace ix
         VkDescriptorSet       m_bindlessDescriptorSet = VK_NULL_HANDLE;
 
         // GPU-Driven Rendering & Culling
-        // Buffers
         std::unique_ptr<VulkanBuffer> m_instanceBuffer;       // Scene Database (Input)
         std::unique_ptr<VulkanBuffer> m_culledInstanceBuffer; // Indirect Commands + Culled Data (Output)
         uint32_t m_currentInstanceCount = 0;
@@ -111,5 +120,12 @@ namespace ix
         std::vector<RenderBatch> m_renderBatches;
         std::vector<GPUInstanceData> m_cpuInstanceCache;
         std::unordered_map<MeshHandle, std::vector<GPUInstanceData>> m_batchMapCache;
+
+        // Imgui
+        VkDescriptorPool m_imguiPool = VK_NULL_HANDLE;
+
+        // Misc
+        bool m_vsync = true;
+        bool m_needsSwapchainRecreation = false;
 	};
 }

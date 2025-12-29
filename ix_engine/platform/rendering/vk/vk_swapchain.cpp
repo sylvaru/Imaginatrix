@@ -7,14 +7,14 @@
 namespace ix
 {
 
-	VulkanSwapchain::VulkanSwapchain(VulkanContext& context, VkExtent2D extent, VulkanSwapchain* old)
+	VulkanSwapchain::VulkanSwapchain(VulkanContext& context, VkExtent2D extent, VulkanSwapchain* old, bool vSync)
 		: m_context(context)
 		, m_extent(extent)
 	{
 		// Capture the handle from the raw pointer if it exists
 		VkSwapchainKHR oldHandle = (old != nullptr) ? old->get() : VK_NULL_HANDLE;
 
-		create(oldHandle);
+		create(oldHandle, vSync);
 	}
 
 	VulkanSwapchain::~VulkanSwapchain()
@@ -35,7 +35,7 @@ namespace ix
 			m_swapchain = VK_NULL_HANDLE;
 		}
 	}
-	void VulkanSwapchain::create(VkSwapchainKHR oldHandle)
+	void VulkanSwapchain::create(VkSwapchainKHR oldHandle, bool vSync)
 	{
 		VkSurfaceCapabilitiesKHR caps;
 		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_context.physicalDevice(), m_context.surface(), &caps);
@@ -64,7 +64,16 @@ namespace ix
 		ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		ci.preTransform = caps.currentTransform;
 		ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-		ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+		
+		if (vSync) {
+			ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+		}
+		else {
+			ci.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+			// Todo: Check if MAILBOX is actually supported 
+			//, otherwise use VK_PRESENT_MODE_IMMEDIATE_KHR.
+		}
+
 		ci.clipped = VK_TRUE;
 		ci.oldSwapchain = oldHandle;
 
