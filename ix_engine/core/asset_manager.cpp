@@ -220,6 +220,7 @@ namespace ix
         gpuMesh->baseVertex = m_currentVertexOffset;
         gpuMesh->firstIndex = m_currentIndexOffset;
         gpuMesh->indexCount = static_cast<uint32_t>(indices.size());
+        gpuMesh->boundingRadius = meshRadius;
 
         VkDeviceSize vertexByteSize = vertices.size() * sizeof(Vertex);
         VkDeviceSize indexByteSize = indices.size() * sizeof(uint32_t);

@@ -8,7 +8,8 @@
 #include <vk_mem_alloc.h>
 
 
-namespace ix {
+namespace ix 
+{
 
     VulkanContext::VulkanContext(VulkanInstance& instance, Window_I& window)
         : m_window(window) 
@@ -71,8 +72,10 @@ namespace ix {
         std::vector<VkPhysicalDevice> devices(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-        for (const auto& device : devices) {
-            if (isDeviceSuitable(device)) {
+        for (const auto& device : devices) 
+        {
+            if (isDeviceSuitable(device)) 
+            {
                 m_physicalDevice = device;
                 break;
             }
@@ -90,20 +93,37 @@ namespace ix {
 
     void VulkanContext::checkCapabilities() 
     {
-        VkPhysicalDeviceVulkan13Features features13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-        VkPhysicalDeviceFeatures2 features2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        // Feature structures
+        VkPhysicalDeviceVulkan13Features features13{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+        VkPhysicalDeviceDescriptorIndexingFeatures indexing{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES };
+        VkPhysicalDeviceFeatures2 features2{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 
-        features2.pNext = &features13;
+        // Build pNext chain to query everything at once
+        features2.pNext = &indexing;
+        indexing.pNext = &features13;
+
         if (m_physicalDevice == VK_NULL_HANDLE) return;
 
         vkGetPhysicalDeviceFeatures2(m_physicalDevice, &features2);
 
+        // Check capabilities
         m_capabilities.hasDynamicRendering = (features13.dynamicRendering == VK_TRUE);
-        m_capabilities.hasBindlessIndexing = true;
 
+        m_capabilities.hasMultiDrawIndirect = (features2.features.multiDrawIndirect == VK_TRUE);
+
+        m_capabilities.hasBindlessIndexing = (indexing.runtimeDescriptorArray == VK_TRUE &&
+            indexing.descriptorBindingPartiallyBound == VK_TRUE);
+
+        // Check limits
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
         m_capabilities.maxAnisotropy = props.limits.maxSamplerAnisotropy;
+
+        // Log the results
+        spdlog::info("Vulkan Capabilities Check:");
+        spdlog::info("  Dynamic Rendering: {}", m_capabilities.hasDynamicRendering);
+        spdlog::info("  Multi-Draw Indirect: {}", m_capabilities.hasMultiDrawIndirect);
+        spdlog::info("  Bindless Indexing: {}", m_capabilities.hasBindlessIndexing);
     }
 
     void VulkanContext::createLogicalDevice() 
@@ -124,31 +144,37 @@ namespace ix {
 
         // Feature 1.3 Features
         VkPhysicalDeviceVulkan13Features features13{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-        features13.dynamicRendering = VK_TRUE;
+        features13.dynamicRendering = m_capabilities.hasDynamicRendering;
         features13.synchronization2 = VK_TRUE;
 
+        // Enable Descriptor Indexing (Bindless)
         VkPhysicalDeviceDescriptorIndexingFeatures indexing{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES };
         indexing.pNext = &features13;
-        indexing.runtimeDescriptorArray = VK_TRUE;
-        indexing.descriptorBindingPartiallyBound = VK_TRUE;
-        indexing.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-        indexing.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        if (m_capabilities.hasBindlessIndexing) {
+            indexing.runtimeDescriptorArray = VK_TRUE;
+            indexing.descriptorBindingPartiallyBound = VK_TRUE;
+            indexing.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+            indexing.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        }
       
 
+        // Enable Core Features
         VkPhysicalDeviceFeatures2 deviceFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
         deviceFeatures.pNext = &indexing;
         deviceFeatures.features.samplerAnisotropy = VK_TRUE;
-        deviceFeatures.features.multiDrawIndirect = VK_TRUE;
+        deviceFeatures.features.multiDrawIndirect = m_capabilities.hasMultiDrawIndirect;
 
         VkDeviceCreateInfo dci{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         dci.pNext = &deviceFeatures;
         dci.queueCreateInfoCount = (uint32_t)queueCreateInfos.size();
         dci.pQueueCreateInfos = queueCreateInfos.data();
-        dci.enabledExtensionCount = (uint32_t)m_deviceExtensions.size();
-        dci.ppEnabledExtensionNames = m_deviceExtensions.data();
+
+        auto enabledExtensions = getEnabledExtensions(m_physicalDevice);
+        dci.enabledExtensionCount = (uint32_t)enabledExtensions.size();
+        dci.ppEnabledExtensionNames = enabledExtensions.data();
 
         if (vkCreateDevice(m_physicalDevice, &dci, nullptr, &m_logicalDevice) != VK_SUCCESS) {
-            throw std::runtime_error("Vulkan: Failed to create logical device!");
+            throw std::runtime_error("Vulkan: Failed to create logical device! Check supported features.");
         }
 
         vkGetDeviceQueue(m_logicalDevice, m_queueFamilyIndices.graphicsFamily, 0, &m_graphicsQueue);
@@ -220,7 +246,7 @@ namespace ix {
     }
 
 
-    SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device) 
+    SwapChainSupportDetails VulkanContext::querySwapChainSupport(VkPhysicalDevice device) const
     {
         SwapChainSupportDetails details;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities);
@@ -252,6 +278,52 @@ namespace ix {
             requiredExtensions.erase(extension.extensionName);
         }
         return requiredExtensions.empty();
+    }
+
+    std::vector<const char*> VulkanContext::getEnabledExtensions(VkPhysicalDevice device)
+    {
+        uint32_t extensionCount;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+        std::vector<const char*> activeExtensions;
+
+        // Get Device Properties to check Vulkan Version
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(device, &props);
+        uint32_t major = VK_API_VERSION_MAJOR(props.apiVersion);
+        uint32_t minor = VK_API_VERSION_MINOR(props.apiVersion);
+
+        for (const char* extName : m_deviceExtensions) {
+            // Check if the extension is available on this hardware
+            bool found = false;
+            for (const auto& available : availableExtensions) {
+                if (strcmp(extName, available.extensionName) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found) {
+                // Skip enabling extensions that are already Core in 1.3
+                if (major == 1 && minor >= 3) {
+                    if (strcmp(extName, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0 ||
+                        strcmp(extName, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) == 0 ||
+                        strcmp(extName, VK_KHR_MAINTENANCE3_EXTENSION_NAME) == 0)
+                    {
+                        spdlog::debug("Extension {} is core in 1.3, skipping explicit enable.", extName);
+                        continue;
+                    }
+                }
+                activeExtensions.push_back(extName);
+            }
+            else {
+                spdlog::error("Required extension NOT FOUND: {}", extName);
+            }
+        }
+
+        return activeExtensions;
     }
 
     void VulkanContext::createImmCommandPool() 

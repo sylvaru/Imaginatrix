@@ -95,10 +95,7 @@ namespace ix
         // Log
         static bool debug_log_once = true;
         if (debug_log_once) {
-            spdlog::info("--- Global Buffer Forward Pass ---");
-            spdlog::info("Global VBO Handle: {:p}, Global IBO Handle: {:p}",
-                (void*)vboHandle, (void*)iboWrapper->getBuffer());
-
+            spdlog::info("--- Forward Pass ---");
             uint32_t totalInstances = 0;
             for (size_t i = 0; i < state.frame.renderBatches->size(); ++i) {
                 const auto& batch = (*state.frame.renderBatches)[i];
@@ -129,6 +126,7 @@ namespace ix
             state.frame.renderBatches->size(),
             sizeof(GPUIndirectCommand)
         );
+
 
         vkCmdEndRendering(cmd);
     }

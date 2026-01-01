@@ -19,6 +19,7 @@ namespace ix
     {
         bool hasDynamicRendering = false;
         bool hasBindlessIndexing = false;
+        bool hasMultiDrawIndirect = false;
         bool hasRayTracing = false;
         float maxAnisotropy = 1.0f;
     };
@@ -80,7 +81,7 @@ namespace ix
 
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) const;
         bool isDeviceSuitable(VkPhysicalDevice device);
-        SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+        SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) const;
         bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
     private:
@@ -103,7 +104,7 @@ namespace ix
         VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
         VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
 
-
+        std::vector<const char*> getEnabledExtensions(VkPhysicalDevice device);
         const std::vector<const char*> m_deviceExtensions =
         { 
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
