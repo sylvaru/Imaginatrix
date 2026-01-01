@@ -35,6 +35,7 @@ void GameLayer::onAttach()
     auto& assetManager = AssetManager::get();
 
     AssetHandle meshHandle = assetManager.loadModel("sphere.gltf");
+    TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
 
     for (int x = -10; x < 10; x++)
     {
@@ -54,7 +55,7 @@ void GameLayer::onAttach()
 
                 tc.scale = { 1.f, 1.f, 1.f};
 
-                entity.addComponent<MeshComponent>(meshHandle);
+                entity.addComponent<MeshComponent>(meshHandle, texHandle);
             }
 
         }

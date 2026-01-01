@@ -23,9 +23,8 @@ namespace ix
         VulkanMesh() = default;
         ~VulkanMesh() = default;
 
-        std::unique_ptr<VulkanBuffer> vertexBuffer;
-        std::unique_ptr<VulkanBuffer> indexBuffer;
-        uint32_t vertexCount{};
+        uint32_t firstIndex{};
+        uint32_t baseVertex{};
         uint32_t indexCount{};
 
         float boundingRadius = 0.0f;

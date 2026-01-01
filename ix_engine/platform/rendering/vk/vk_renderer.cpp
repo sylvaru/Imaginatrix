@@ -79,7 +79,7 @@ namespace ix
 
 		// Initialize Culled Instance Buffer (Commands + Filtered Data)
 		const uint32_t MAX_BATCHES = 16;
-		const VkDeviceSize commandHeaderSize = 1024; // 16 * sizeof(GPUIndirectCommand)
+		const VkDeviceSize commandHeaderSize = 1024;
 
 		m_culledInstanceBuffer = std::make_unique<VulkanBuffer>(
 			*m_context,
@@ -93,9 +93,8 @@ namespace ix
 		m_bindlessPool = m_descriptorManagers[0]->createBindlessPool(1, 1000);
 		m_descriptorManagers[0]->allocateBindless(m_bindlessPool, &m_bindlessDescriptorSet, m_bindlessLayout, 1000);
 
-		// PRE-ALLOCATE PER-FRAME DESCRIPTORS
+		// Pre allocate per frame descriptors
 		m_frameDescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
 			auto& sets = m_frameDescriptorSets[i];
@@ -140,28 +139,6 @@ namespace ix
 		}
 
 		spdlog::info("Vulkan Renderer: Initialized. Descriptors baked for {} frames.", MAX_FRAMES_IN_FLIGHT);
-	}
-
-	void VulkanRenderer::compileRenderGraph()
-	{
-		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
-		auto equirectToCubePass = std::make_unique<EquirectToCubemapPass>("ComputePass");
-		auto computeCullingPass = std::make_unique<ComputeCullingPass>("ComputeCulling");
-		auto skyboxPass = std::make_unique<SkyboxPass>("SkyboxPass");
-		auto imguiPass = std::make_unique<ImGuiPass>("ImGuiPass");
-
-		m_renderGraphCompileConfig.context = m_context.get();
-		m_renderGraphCompileConfig.pipelineManager = m_pipelineManager.get();
-
-		m_renderGraph->importBuffer("InstanceDb", m_instanceBuffer.get());
-		m_renderGraph->importBuffer("CulledInstances", m_culledInstanceBuffer.get());
-
-		m_renderGraph->addPass(std::move(computeCullingPass));
-		m_renderGraph->addPass(std::move(forwardPass));
-		m_renderGraph->addPass(std::move(equirectToCubePass));
-		m_renderGraph->addPass(std::move(skyboxPass));
-		m_renderGraph->addPass(std::move(imguiPass));
-		m_renderGraph->compile(m_renderGraphCompileConfig);
 	}
 	
 	bool VulkanRenderer::beginFrame(FrameContext& ctx, const SceneView& view)
@@ -211,8 +188,8 @@ namespace ix
 			GPUIndirectCommand cmd{};
 			cmd.indexCount = mesh ? mesh->indexCount : 0;
 			cmd.instanceCount = 0;
-			cmd.firstIndex = 0;
-			cmd.vertexOffset = 0;
+			cmd.firstIndex = mesh ? mesh->firstIndex : 0;
+			cmd.vertexOffset = mesh ? mesh->baseVertex : 0;
 			cmd.firstInstance = 0;
 			resetCmds.push_back(cmd);
 		}
@@ -233,7 +210,7 @@ namespace ix
 		resetBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 		resetBarrier.buffer = m_culledInstanceBuffer->getBuffer();
 		resetBarrier.offset = 0;
-		resetBarrier.size = 1024;
+		resetBarrier.size = VK_WHOLE_SIZE;
 
 		vkCmdPipelineBarrier(
 			frame.commandBuffer,
@@ -474,6 +451,28 @@ namespace ix
 		}
 
 		m_currentFrameIndex = (m_currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+	}
+
+	void VulkanRenderer::compileRenderGraph()
+	{
+		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
+		auto equirectToCubePass = std::make_unique<EquirectToCubemapPass>("ComputePass");
+		auto computeCullingPass = std::make_unique<ComputeCullingPass>("ComputeCulling");
+		auto skyboxPass = std::make_unique<SkyboxPass>("SkyboxPass");
+		auto imguiPass = std::make_unique<ImGuiPass>("ImGuiPass");
+
+		m_renderGraphCompileConfig.context = m_context.get();
+		m_renderGraphCompileConfig.pipelineManager = m_pipelineManager.get();
+
+		m_renderGraph->importBuffer("InstanceDb", m_instanceBuffer.get());
+		m_renderGraph->importBuffer("CulledInstances", m_culledInstanceBuffer.get());
+
+		m_renderGraph->addPass(std::move(computeCullingPass));
+		m_renderGraph->addPass(std::move(forwardPass));
+		m_renderGraph->addPass(std::move(equirectToCubePass));
+		m_renderGraph->addPass(std::move(skyboxPass));
+		m_renderGraph->addPass(std::move(imguiPass));
+		m_renderGraph->compile(m_renderGraphCompileConfig);
 	}
 
 	void VulkanRenderer::loadPipelines(const nlohmann::json& json)
@@ -800,7 +799,7 @@ namespace ix
 		if (m_imguiPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(m_context->device(), m_imguiPool, nullptr);
 		
 
-		// Cleanup / reset owned resources
+		// Clean up resources
 		if (m_pipelineManager) 
 		{
 			m_pipelineManager->clearCache();

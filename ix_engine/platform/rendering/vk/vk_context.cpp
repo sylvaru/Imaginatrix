@@ -138,6 +138,7 @@ namespace ix {
         VkPhysicalDeviceFeatures2 deviceFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
         deviceFeatures.pNext = &indexing;
         deviceFeatures.features.samplerAnisotropy = VK_TRUE;
+        deviceFeatures.features.multiDrawIndirect = VK_TRUE;
 
         VkDeviceCreateInfo dci{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         dci.pNext = &deviceFeatures;

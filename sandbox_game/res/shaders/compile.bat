@@ -1,14 +1,13 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Since the script is in the same folder as the shaders
 set "OUTPUT_DIR=spirV"
 
 echo ------------------------------------------
 echo  Imaginatrix Engine: Shader Compilation
 echo ------------------------------------------
 
-:: Create SPIR-V output directory if it doesn't exist
+:: Create SPIR-V output directory
 if not exist "%OUTPUT_DIR%" (
     echo Creating directory: %OUTPUT_DIR%
     mkdir "%OUTPUT_DIR%"

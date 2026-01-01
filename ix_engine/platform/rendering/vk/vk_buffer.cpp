@@ -69,7 +69,8 @@ namespace ix
             memcpy(memPtr, data, size);
         }
     }
-    void VulkanBuffer::uploadData(const void* data, VkDeviceSize size, VkDeviceSize offset) {
+    void VulkanBuffer::uploadData(const void* data, VkDeviceSize size, VkDeviceSize offset) 
+    {
         if (size == VK_WHOLE_SIZE) size = m_bufferSize;
 
         // Check if this buffer is actually CPU visible
@@ -87,34 +88,32 @@ namespace ix
         }
         else {
             // Staging path: Create a temporary host-visible buffer
-            VulkanBuffer stagingBuffer(
-                m_context,
-                size,
-                1,
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                VMA_MEMORY_USAGE_CPU_ONLY
-            );
+            VulkanBuffer stagingBuffer(m_context, size, 1,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
             stagingBuffer.map();
             stagingBuffer.writeToBuffer((void*)data, size);
             stagingBuffer.unmap();
 
             // Use a one-time command buffer to copy from staging to this (GPU_ONLY) buffer
-            copyBuffer(m_context, stagingBuffer.getBuffer(), m_buffer, size);
+            copyBuffer(m_context, stagingBuffer.getBuffer(), m_buffer, size, offset);
         }
     }
 
-    void VulkanBuffer::copyBuffer(VulkanContext& context, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+    void VulkanBuffer::copyBuffer(VulkanContext& context, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkDeviceSize dstOffset) 
+    {
         context.immediateSubmit([&](VkCommandBuffer cmd) {
             VkBufferCopy copyRegion{};
             copyRegion.srcOffset = 0;
-            copyRegion.dstOffset = 0;
+            copyRegion.dstOffset = dstOffset;
             copyRegion.size = size;
+
             vkCmdCopyBuffer(cmd, srcBuffer, dstBuffer, 1, &copyRegion);
             });
     }
 
-    VkBuffer VulkanBuffer::getBuffer() const {
+    VkBuffer VulkanBuffer::getBuffer() const 
+    {
         return m_buffer;
     }
 

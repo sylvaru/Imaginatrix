@@ -42,10 +42,7 @@ layout(std430, set = 2, binding = 2) readonly buffer InstanceBuffer
 
 void main() 
 {
-
-    uint actualIndex = drawConstants.baseInstanceOffset + gl_InstanceIndex;
-    
-    InstanceData inst = instanceData.instances[actualIndex];
+    InstanceData inst = instanceData.instances[gl_InstanceIndex];
     mat4 model = inst.modelMatrix;
     outTextureIndex = inst.textureIndex;
 

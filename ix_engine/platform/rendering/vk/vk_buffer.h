@@ -35,7 +35,7 @@ namespace ix
         void uploadData(const void* data, VkDeviceSize size, VkDeviceSize offset = 0);
 
         // Helper for one-time command submission
-        static void copyBuffer(VulkanContext& context, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+        static void copyBuffer(VulkanContext& context, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkDeviceSize dstOffset);
 
         VkDescriptorBufferInfo descriptorInfo(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
 

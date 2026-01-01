@@ -40,6 +40,9 @@ namespace ix
         uint32_t getHDRSourceBindlessIndex(TextureHandle handle);
         float getMeshBoundingRadius(AssetHandle handle);
 
+        VulkanBuffer* getGlobalVBO() { return m_globalVBO.get(); }
+        VulkanBuffer* getGlobalIBO() { return m_globalIBO.get(); }
+
         std::vector<BindlessUpdateRequest> takePendingUpdates();
         void setModelRoot(const std::string& root) { m_modelRoot = root; }
         void setTextureRoot(const std::string& root) { m_texRoot = root; }
@@ -73,5 +76,10 @@ namespace ix
         std::unordered_map<TextureHandle, std::unique_ptr<VulkanImage>> m_hdrSources;
         std::unordered_map<TextureHandle, uint32_t> m_hdrSourceBindlessSlots;
         std::unordered_map<AssetHandle, float> m_meshRadii;
+
+        std::unique_ptr<VulkanBuffer> m_globalVBO;
+        std::unique_ptr<VulkanBuffer> m_globalIBO;
+        uint32_t m_currentVertexOffset = 0;
+        uint32_t m_currentIndexOffset = 0;
     };
 }

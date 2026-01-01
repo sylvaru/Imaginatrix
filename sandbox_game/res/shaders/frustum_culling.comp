@@ -1,3 +1,4 @@
+// frustum_culling.comp
 #version 450
 layout(local_size_x = 64) in;
 
@@ -80,6 +81,8 @@ void main()
         // Atomic increment for the draw command (instanceCount)
         uint localIdx = atomicAdd(culledData.commands[bID].instanceCount, 1);
         
+        // Tell the indirect command to start reading at the correct offset
+        culledData.commands[bID].firstInstance = pcs.batchOffsets[bID];
         // Calculate global destination index based on the batch's starting offset
         uint globalDestIdx = pcs.batchOffsets[bID] + localIdx;
         

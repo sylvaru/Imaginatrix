@@ -16,7 +16,7 @@
                 "primary": true
             },
             "controller": {
-                "speed": 35.0,
+                "speed": 15.0,
                 "sensitivity": 0.002
             }
         },

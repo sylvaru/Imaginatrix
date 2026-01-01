@@ -33,7 +33,31 @@ namespace ix
         // Missing Texture (Slot 0)
         uint32_t magenta = 0xFFFF00FF;
         loadTextureFromMemory("missing_tex", &magenta, 1, 1, VK_FORMAT_R8G8B8A8_SRGB);
-        spdlog::info("AssetManager: Initialized with Context at {:p}", (void*)m_context);
+
+
+        // Initialize Global VBO (1 Million Vertices)
+        const size_t vertexBufferSize = 1000000 * sizeof(Vertex);
+        m_globalVBO = std::make_unique<VulkanBuffer>(
+            *m_context,
+            vertexBufferSize,
+            1,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY
+        );
+
+        // Initialize Global IBO (2 Million Indices)
+        const size_t indexBufferSize = 2000000 * sizeof(uint32_t);
+        m_globalIBO = std::make_unique<VulkanBuffer>(
+            *m_context,
+            indexBufferSize,
+            1,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY
+        );
+
+        // Track offsets
+        m_currentVertexOffset = 0;
+        m_currentIndexOffset = 0;
     }
 
     void AssetManager::loadAssetList(const nlohmann::json& json) 
@@ -193,30 +217,27 @@ namespace ix
 
         // GPU Upload
         auto gpuMesh = std::make_unique<VulkanMesh>();
-        gpuMesh->vertexBuffer = nullptr;
-        gpuMesh->indexBuffer = nullptr;
-        gpuMesh->boundingRadius = meshRadius;
-        gpuMesh->vertexCount = static_cast<uint32_t>(vertices.size());
+        gpuMesh->baseVertex = m_currentVertexOffset;
+        gpuMesh->firstIndex = m_currentIndexOffset;
         gpuMesh->indexCount = static_cast<uint32_t>(indices.size());
 
-        size_t vSize = vertices.size() * sizeof(Vertex);
-        size_t iSize = indices.size() * sizeof(uint32_t);
+        VkDeviceSize vertexByteSize = vertices.size() * sizeof(Vertex);
+        VkDeviceSize indexByteSize = indices.size() * sizeof(uint32_t);
 
+        m_globalVBO->uploadData(vertices.data(), vertexByteSize, gpuMesh->baseVertex * sizeof(Vertex));
+        m_globalIBO->uploadData(indices.data(), indexByteSize, gpuMesh->firstIndex * sizeof(uint32_t));
 
-        gpuMesh->vertexBuffer = std::make_unique<VulkanBuffer>(
-            *m_context, vSize, 1,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+        m_currentVertexOffset += vertices.size();
+        m_currentIndexOffset += indices.size();
 
-        gpuMesh->indexBuffer = std::make_unique<VulkanBuffer>(
-            *m_context, iSize, 1,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-            VMA_MEMORY_USAGE_GPU_ONLY);
+        float vboUsage = (float)(m_currentVertexOffset * sizeof(Vertex)) / m_globalVBO->getBufferSize() * 100.0f;
+        float iboUsage = (float)(m_currentIndexOffset * sizeof(uint32_t)) / m_globalIBO->getBufferSize() * 100.0f;
 
-        gpuMesh->vertexBuffer->uploadData(vertices.data(), vSize);
-        gpuMesh->indexBuffer->uploadData(indices.data(), iSize);
-
-        spdlog::info("AssetManager: Loaded {} vertices and {} indices from {}", vertices.size(), indices.size(), path);
+        spdlog::info("AssetManager: Loaded {} [{}]", osPath.filename().string(), path);
+        spdlog::info("  -> VBO: Range[{}-{}] | Total Usage: {:.2f}%",
+            gpuMesh->baseVertex, m_currentVertexOffset, vboUsage);
+        spdlog::info("  -> IBO: Range[{}-{}] | Total Usage: {:.2f}%",
+            gpuMesh->firstIndex, m_currentIndexOffset, iboUsage);
 
         return gpuMesh;
     }
@@ -400,8 +421,13 @@ namespace ix
     {
         spdlog::info("AssetManager: Clearing asset cache...");
 
+        // Destroy global VBO/IBO
+        m_globalVBO.reset();
+        m_globalIBO.reset();
+
         // Destroy all meshes
         m_meshes.clear();
+        
 
         // Destroy all textures
         m_textures.clear();

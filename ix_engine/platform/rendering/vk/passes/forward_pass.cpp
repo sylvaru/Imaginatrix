@@ -79,52 +79,56 @@ namespace ix
            state.frame.bindlessDescriptorSet,
            state.frame.instanceDescriptorSet
         };
+
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
             m_cachedPipeline->getLayout(), 0, 3, sets, 0, nullptr);
 
+        // Bind global VBO/IBO
+        VulkanBuffer* vboWrapper = AssetManager::get().getGlobalVBO();
+        VulkanBuffer* iboWrapper = AssetManager::get().getGlobalIBO();
+        VkDeviceSize offset = 0;
+        VkBuffer vboHandle = vboWrapper->getBuffer();
+
+        vkCmdBindVertexBuffers(cmd, 0, 1, &vboHandle, &offset);
+        vkCmdBindIndexBuffer(cmd, iboWrapper->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
         // Log
         static bool debug_log_once = true;
         if (debug_log_once) {
-            spdlog::info("--- Forward pass Draw Call Breakdown ---");
-            for (const auto& batch : *state.frame.renderBatches) 
-            {
-                spdlog::info("Batch: MeshHandle {}, Instances: {}, Offset: {}",
-                    batch.meshHandle, batch.instanceCount, batch.firstInstance);
+            spdlog::info("--- Global Buffer Forward Pass ---");
+            spdlog::info("Global VBO Handle: {:p}, Global IBO Handle: {:p}",
+                (void*)vboHandle, (void*)iboWrapper->getBuffer());
+
+            uint32_t totalInstances = 0;
+            for (size_t i = 0; i < state.frame.renderBatches->size(); ++i) {
+                const auto& batch = (*state.frame.renderBatches)[i];
+                auto* mesh = AssetManager::get().getMesh(batch.meshHandle);
+
+                spdlog::info("Batch [{}] (Mesh: {}):", i, batch.meshHandle);
+                spdlog::info("  -> Instances: {} (Starting at Global Index: {})",
+                    batch.instanceCount, batch.firstInstance);
+
+                if (mesh) {
+                    spdlog::info("  -> Geometry: BaseVertex: {}, FirstIndex: {}, Count: {}",
+                        mesh->baseVertex, mesh->firstIndex, mesh->indexCount);
+                }
+                totalInstances += batch.instanceCount;
             }
-            debug_log_once = false; // Only log the first frame
+
+            spdlog::info("Total Indirect Commands: {} | Total Potential Instances: {}",
+                state.frame.renderBatches->size(), totalInstances);
+
+            debug_log_once = false;
         }
 
-        // The Batch Loop
-        uint32_t batchIndex = 0;
-        for (const auto& batch : *state.frame.renderBatches)
-        {
-            VulkanMesh* mesh = state.system.assetManager->getMesh(batch.meshHandle);
-            if (!mesh) continue;
-
-            uint32_t baseOffset = batch.firstInstance;
-            vkCmdPushConstants(cmd, m_cachedPipeline->getLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
-                0, sizeof(uint32_t), &baseOffset);
-
-            VkDeviceSize offsets[] = { 0 };
-            VkBuffer vBuffer = mesh->vertexBuffer->getBuffer();
-            VkBuffer iBuffer = mesh->indexBuffer->getBuffer();
-
-            // Bind Geometry
-            vkCmdBindVertexBuffers(cmd, 0, 1, &vBuffer, offsets);
-            vkCmdBindIndexBuffer(cmd, iBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            // Draw
-            vkCmdDrawIndexedIndirect(
-                cmd,
-                culledBuffer->getBuffer(),
-                batchIndex * sizeof(GPUIndirectCommand),
-                1,
-                sizeof(GPUIndirectCommand)
-            );
-
-            batchIndex++;
-        }
+        // Draw
+        vkCmdDrawIndexedIndirect(
+            cmd,
+            culledBuffer->getBuffer(),
+            0,
+            state.frame.renderBatches->size(),
+            sizeof(GPUIndirectCommand)
+        );
 
         vkCmdEndRendering(cmd);
     }
