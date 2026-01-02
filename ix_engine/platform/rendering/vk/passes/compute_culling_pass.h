@@ -12,6 +12,7 @@ namespace ix
     public:
         ComputeCullingPass(const std::string& name);
         virtual ~ComputeCullingPass() = default;
+        PassType getPassType() const override { return PassType::Compute; }
 
         void setup(RenderGraphBuilder& builder) override;
 

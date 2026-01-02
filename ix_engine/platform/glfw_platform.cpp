@@ -29,6 +29,7 @@ namespace ix
         if (!glfwInit())
             throw std::runtime_error("Failed to initialize GLFW");
 
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
@@ -66,7 +67,6 @@ namespace ix
         }
         }
 
-
         m_window = glfwCreateWindow(
             width,
             height,
@@ -78,11 +78,23 @@ namespace ix
         if (!m_window)
             throw std::runtime_error("Failed to create GLFW window");
 
+        // Center window if in Windowed mode
+        if (spec.mode == WindowMode::Windowed) {
+            GLFWmonitor* primary = glfwGetPrimaryMonitor();
+            const GLFWvidmode* mode = glfwGetVideoMode(primary);
+
+            int posX = (mode->width - width) / 2;
+            int posY = (mode->height - height) / 2;
+            glfwSetWindowPos(m_window, posX, posY);
+        }
+
+        // Now show the window in its correct position
+        glfwShowWindow(m_window);
+
         m_width = width;
         m_height = height;
 
         glfwSetWindowUserPointer(m_window, this);
-
         glfwSetFramebufferSizeCallback(m_window, framebufferResizeCallback);
         glfwSetCursorPosCallback(m_window, cursorPosCallback);
         glfwSetKeyCallback(m_window, keyCallback);

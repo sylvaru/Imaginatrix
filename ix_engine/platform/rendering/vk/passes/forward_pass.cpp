@@ -19,7 +19,7 @@ namespace ix
     void ForwardPass::setup(RenderGraphBuilder& builder) 
     {
         builder.write("BackBuffer");
-        builder.write("DepthBuffer");
+        builder.read("DepthBuffer");
         m_cachedPipeline = builder.getPipelineManager()->getGraphicsPipeline("ForwardPass");
     }
 
@@ -50,7 +50,7 @@ namespace ix
         VkRenderingAttachmentInfo depthAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
         depthAttachment.imageView = depthImage->getView();
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         depthAttachment.clearValue.depthStencil = { 1.0f, 0 };
 

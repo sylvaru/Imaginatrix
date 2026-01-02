@@ -20,6 +20,10 @@ namespace ix
         RGResourceType type;
     };
 
+    enum class PassType {
+        Graphics,
+        Compute
+    };
 
     class RenderGraphPass_I {
     public:
@@ -31,6 +35,8 @@ namespace ix
         virtual void execute(const RenderState& state, RenderGraphRegistry& registry) = 0;
 
         const std::string& getName() const { return m_name; }
+
+        virtual PassType getPassType() const { return PassType::Graphics; }
 
     private:
         std::string m_name;

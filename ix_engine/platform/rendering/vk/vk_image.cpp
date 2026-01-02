@@ -208,6 +208,15 @@ namespace ix
         return info;
     }
 
+    bool VulkanImage::isDepthFormat() const
+    {
+        return m_format == VK_FORMAT_D32_SFLOAT ||
+            m_format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+            m_format == VK_FORMAT_D24_UNORM_S8_UINT ||
+            m_format == VK_FORMAT_D16_UNORM ||
+            m_format == VK_FORMAT_D16_UNORM_S8_UINT;
+    }
+
     VulkanImage::~VulkanImage()
     {
         if (m_view != VK_NULL_HANDLE) {

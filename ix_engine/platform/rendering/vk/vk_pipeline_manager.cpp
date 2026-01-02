@@ -66,7 +66,15 @@ namespace ix
 	VulkanPipeline* VulkanPipelineManager::bakePipeline(const PipelineDefinition& def)
 	{
 		PipelineState hardwareState = def.baseState;
-		hardwareState.colorAttachmentFormats = { m_context.getSwapchainFormat() };
+
+		// Only assign a color format if the base state actually intended to have color attachments
+		if (!def.fragPath.empty() && hardwareState.colorAttachmentFormats.size() > 0) {
+			hardwareState.colorAttachmentFormats = { m_context.getSwapchainFormat() };
+		}
+		else {
+			hardwareState.colorAttachmentFormats = {}; // Force empty for depth-only
+		}
+
 		hardwareState.depthAttachmentFormat = m_context.getDepthFormat();
 
 		auto pipeline = std::make_shared<VulkanPipeline>(

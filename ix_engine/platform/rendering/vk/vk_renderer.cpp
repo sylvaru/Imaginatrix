@@ -13,6 +13,7 @@
 #include "vk_descriptor_manager.h"
 
 #include "platform/rendering/vk/render_graph/vk_render_graph.h"
+#include "platform/rendering/vk/passes/depth_pre_pass.h"
 #include "platform/rendering/vk/passes/forward_pass.h"
 #include "platform/rendering/vk/passes/skybox_pass.h"
 #include "platform/rendering/vk/passes/equirect_to_cube_pass.h"
@@ -455,6 +456,7 @@ namespace ix
 
 	void VulkanRenderer::compileRenderGraph()
 	{
+		auto depthPrePass = std::make_unique<DepthPrePass>("DepthPrePass");
 		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
 		auto equirectToCubePass = std::make_unique<EquirectToCubemapPass>("ComputePass");
 		auto computeCullingPass = std::make_unique<ComputeCullingPass>("ComputeCulling");
@@ -468,6 +470,7 @@ namespace ix
 		m_renderGraph->importBuffer("CulledInstances", m_culledInstanceBuffer.get());
 
 		m_renderGraph->addPass(std::move(computeCullingPass));
+		m_renderGraph->addPass(std::move(depthPrePass));
 		m_renderGraph->addPass(std::move(forwardPass));
 		m_renderGraph->addPass(std::move(equirectToCubePass));
 		m_renderGraph->addPass(std::move(skyboxPass));
@@ -479,50 +482,48 @@ namespace ix
 	{
 		std::string shaderRoot = std::string(PROJECT_ROOT_DIR) + "/sandbox_game/res/shaders/spirV/";
 
-
 		for (const auto& entry : json["pipelines"]) {
-
-
+			std::string name = entry.value("name", "Unknown");
 			std::string type = entry.value("type", "graphics");
-			std::string name = entry["name"];
-
 			VkPipelineLayout activeLayout = VK_NULL_HANDLE;
 
-			if (type == "compute") 
-			{
-				if (name == "FrustumCull") 
-				{
-					activeLayout = m_cullingPipelineLayout;
-				}
-				else 
-				{
-					activeLayout = m_computePipelineLayout;
-				}
+			// Layout Selection
+			if (type == "compute") {
+				activeLayout = (name == "FrustumCull") ? m_cullingPipelineLayout : m_computePipelineLayout;
 			}
-			else if (type == "graphics") {
+			else {
 				activeLayout = m_graphicsPipelineLayout;
 			}
 
 			if (activeLayout == VK_NULL_HANDLE) {
-				throw std::runtime_error("Pipeline '" + name + "' has no valid layout defined!");
+				spdlog::error("Pipeline '{}' has no valid layout!", name);
+				continue;
 			}
 
+			// Compute Pipeline Path
 			if (type == "compute") {
+				if (!entry.contains("compute")) {
+					spdlog::error("Compute pipeline '{}' missing 'compute' shader field!", name);
+					continue;
+				}
 				std::string compPath = shaderRoot + entry["compute"].get<std::string>();
 				m_pipelineManager->createComputePipeline(name, compPath, activeLayout);
 				spdlog::info("VulkanRenderer: Created compute pipeline '{}'", name);
 			}
+			// Graphics Pipeline Path
 			else {
-				// Graphics Pipeline Path
 				PipelineState state;
 				auto& sJson = entry["state"];
 
 				state.isProcedural = sJson.value("procedural", false);
 
-				state.topology = (sJson["topology"] == "triangle_list") ?
+				// Topology
+				std::string topo = sJson.value("topology", "triangle_list");
+				state.topology = (topo == "triangle_list") ?
 					VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
-				state.polygonMode = (sJson["polygonMode"] == "line") ?
+				// Polygon Mode
+				state.polygonMode = (sJson.value("polygonMode", "fill") == "line") ?
 					VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 
 				state.cullMode = m_pipelineManager->parseCullMode(sJson.value("cullMode", "back"));
@@ -531,18 +532,30 @@ namespace ix
 				state.depthTest = sJson.value("depthTest", true) ? VK_TRUE : VK_FALSE;
 				state.depthWrite = sJson.value("depthWrite", true) ? VK_TRUE : VK_FALSE;
 
-				state.depthCompareOp = (sJson.value("compareOp", "less") == "less_or_equal") ?
-					VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS;
+				// Handle Depth Compare Op properly
+				std::string op = sJson.value("compareOp", "less");
+				if (op == "less_or_equal") state.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+				else if (op == "equal")     state.depthCompareOp = VK_COMPARE_OP_EQUAL;
+				else if (op == "always")    state.depthCompareOp = VK_COMPARE_OP_ALWAYS;
+				else                        state.depthCompareOp = VK_COMPARE_OP_LESS;
 
 				state.colorAttachmentFormats = { m_swapchain->getFormat() };
 				state.depthAttachmentFormat = m_context->getDepthFormat();
 
+				// Handle optional Frag shader 
 				std::string vertPath = shaderRoot + entry["vert"].get<std::string>();
-				std::string fragPath = shaderRoot + entry["frag"].get<std::string>();
+				std::string fragPath = "";
+				if (entry.contains("frag")) {
+					fragPath = shaderRoot + entry["frag"].get<std::string>();
+					state.colorAttachmentFormats = { m_swapchain->getFormat() };
+				}
+				else {
+					state.colorAttachmentFormats = {};
+				}
 
 				m_pipelineManager->createGraphicsPipeline(name, vertPath, fragPath, state, activeLayout);
-
-				spdlog::info("VulkanRenderer: Created graphics pipeline '{}'", name);
+				spdlog::info("VulkanRenderer: Created graphics pipeline '{}' (Frag: {})",
+					name, fragPath.empty() ? "None" : "Enabled");
 			}
 		}
 	}

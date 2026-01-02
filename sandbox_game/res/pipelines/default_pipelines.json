@@ -1,10 +1,9 @@
 {
     "pipelines": [
         {
-            "name": "ForwardPass",
+            "name": "DepthPrePass",
             "type": "graphics",
-            "vert": "test.vert.spv",
-            "frag": "test.frag.spv",
+            "vert": "forward.vert.spv",
             "state": {
                 "topology": "triangle_list",
                 "polygonMode": "fill",
@@ -12,6 +11,20 @@
                 "depthTest": true,
                 "depthWrite": true,
                 "compareOp": "less"
+            }
+        },
+        {
+            "name": "ForwardPass",
+            "type": "graphics",
+            "vert": "forward.vert.spv",
+            "frag": "forward.frag.spv",
+            "state": {
+                "topology": "triangle_list",
+                "polygonMode": "fill",
+                "cullMode": "back",
+                "depthTest": true,
+                "depthWrite": false,
+                "compareOp": "less_or_equal"
             }
         },
         {

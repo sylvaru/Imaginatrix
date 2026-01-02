@@ -38,7 +38,7 @@ namespace ix
         VkImageLayout getLayout() const { return m_currentLayout; }
         VkDescriptorImageInfo getImageInfo(VkSampler sampler, VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
         VkDescriptorImageInfo getDescriptorInfo(VkSampler sampler) const;
-      
+        bool isDepthFormat() const;
 
     private:
         void createView();

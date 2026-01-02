@@ -66,7 +66,7 @@ add_library(ix_engine STATIC
 
     engine.h
     engine.cpp
-    )
+     "platform/rendering/vk/passes/depth_pre_pass.h" "platform/rendering/vk/passes/depth_pre_pass.cpp")
 
 target_precompile_headers(ix_engine
     PRIVATE

@@ -11,6 +11,7 @@ namespace ix
     public:
         EquirectToCubemapPass(const std::string& name);
         virtual ~EquirectToCubemapPass() = default;
+        PassType getPassType() const override { return PassType::Compute; }
 
         void setup(RenderGraphBuilder& builder) override;
 

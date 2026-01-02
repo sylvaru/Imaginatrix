@@ -23,7 +23,8 @@ namespace ix
         for (auto& entry : m_compiledPasses) 
         {
             entry.requests.clear();
-            RenderGraphBuilder builder(m_registry, entry.requests, config);
+            PassType pType = entry.pass->getPassType();
+            RenderGraphBuilder builder(m_registry, entry.requests, config, pType);
             entry.pass->setup(builder);
         }
     }
@@ -50,15 +51,25 @@ namespace ix
         {
             VulkanImage* img = state.physicalImage;
             VkImageLayout targetLayout;
+            bool isDepth = img->isDepthFormat();
 
-            if (request.name == "DepthBuffer") {
-                targetLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            if (isDepth) {
+                if (request.passType == PassType::Graphics) {
+                    // In graphics passes, depth is always an attachment
+                    targetLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                }
+                else {
+                    // In compute/sampling, depth is a texture
+                    targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                }
             }
-            else if (request.access == AccessType::Write) {
-                targetLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            }
-            else {
-                targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            else { // Color Image
+                if (request.access == AccessType::Write) {
+                    targetLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                }
+                else {
+                    targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                }
             }
 
             if (img->getLayout() != targetLayout) {

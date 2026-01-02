@@ -15,22 +15,32 @@ namespace ix
         : m_context(context)
         , m_layout(layout)
     {
+        // Vertex Shader (Required)
         auto vertCode = readFile(vertPath);
-        auto fragCode = readFile(fragPath);
-        VkShaderModule vertModule, fragModule;
+        VkShaderModule vertModule;
         createShaderModule(context, vertCode, &vertModule);
-        createShaderModule(context, fragCode, &fragModule);
 
-        VkPipelineShaderStageCreateInfo stages[2]{};
-        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        stages[0].module = vertModule;
-        stages[0].pName = "main";
+        std::vector<VkPipelineShaderStageCreateInfo> stages;
 
-        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stages[1].module = fragModule;
-        stages[1].pName = "main";
+        VkPipelineShaderStageCreateInfo vertStage{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+        vertStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertStage.module = vertModule;
+        vertStage.pName = "main";
+        stages.push_back(vertStage);
+
+        // Fragment Shader (Optional)
+        VkShaderModule fragModule = VK_NULL_HANDLE;
+        if (!fragPath.empty())
+        {
+            auto fragCode = readFile(fragPath);
+            createShaderModule(context, fragCode, &fragModule);
+
+            VkPipelineShaderStageCreateInfo fragStage{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
+            fragStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            fragStage.module = fragModule;
+            fragStage.pName = "main";
+            stages.push_back(fragStage);
+        }
 
         // Dynamic Rendering Info
         VkPipelineRenderingCreateInfo renderingInfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
@@ -109,8 +119,8 @@ namespace ix
         // Create the pipeline
         VkGraphicsPipelineCreateInfo pipelineCI{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
         pipelineCI.pNext = &renderingInfo;
-        pipelineCI.stageCount = 2;
-        pipelineCI.pStages = stages;
+        pipelineCI.stageCount = static_cast<uint32_t>(stages.size());
+        pipelineCI.pStages = stages.data();
         pipelineCI.pVertexInputState = &vertexInput;
         pipelineCI.pInputAssemblyState = &inputAssembly;
         pipelineCI.pViewportState = &viewportState;
@@ -126,7 +136,9 @@ namespace ix
         }
 
         vkDestroyShaderModule(m_context.device(), vertModule, nullptr);
-        vkDestroyShaderModule(m_context.device(), fragModule, nullptr);
+        if (fragModule != VK_NULL_HANDLE) {
+            vkDestroyShaderModule(m_context.device(), fragModule, nullptr);
+        }
     }
 
     std::vector<uint32_t> VulkanPipeline::readFile(const std::string& filepath) {
