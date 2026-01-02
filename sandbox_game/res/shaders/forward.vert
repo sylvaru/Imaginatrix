@@ -9,7 +9,8 @@ layout(location = 3) in vec4 inColor;
 
 layout(location = 0) out vec2 fragUV;
 layout(location = 1) out flat uint outTextureIndex; 
-
+layout(location = 2) out vec3 outViewPos;
+layout(location = 3) out vec3 outViewNormal;
 
 layout(push_constant) uniform DrawConstants {
     uint baseInstanceOffset; 
@@ -20,6 +21,7 @@ layout(set = 0, binding = 0) uniform GlobalUbo
     mat4 projection;
     mat4 view;
     vec4 cameraPos;
+    vec2 screenResolution;
     float time;
     float deltaTime;
     float skyboxIntensity;
@@ -46,6 +48,12 @@ void main()
     mat4 model = inst.modelMatrix;
     outTextureIndex = inst.textureIndex;
 
-    gl_Position = ubo.projection * ubo.view * model * vec4(inPosition, 1.0);
+    mat3 normalMatrix = transpose(inverse(mat3(ubo.view * model)));
+    outViewNormal = normalize(normalMatrix * inNormal);
+
+    vec4 viewPos = ubo.view * model * vec4(inPosition, 1.0);
+    outViewPos = viewPos.xyz;
+
+    gl_Position = ubo.projection * viewPos;
     fragUV = inTexCoord;
 }

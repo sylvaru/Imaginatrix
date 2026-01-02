@@ -69,4 +69,11 @@ namespace ix
         float moveSpeed = 5.0f;
         float lookSensitivity = 0.1f;
     };
+
+    struct PointLightComponent
+    {
+        glm::vec3 color{ 1.0f, 1.0f, 1.0f };
+        float intensity{ 1.0f };
+        float radius{ 10.0f };
+    };
 }

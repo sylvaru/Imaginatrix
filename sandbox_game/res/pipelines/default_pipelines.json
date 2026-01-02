@@ -51,6 +51,16 @@
             "name": "FrustumCull",
             "type": "compute",
             "compute": "frustum_culling.comp.spv"
+        },
+        {
+            "name": "ClusterBuild",
+            "type": "compute",
+            "compute": "cluster_build.comp.spv"
+        },
+        {
+            "name": "ClusterCulling",
+            "type": "compute",
+            "compute": "cluster_culling.comp.spv"
         }
     ]
 }

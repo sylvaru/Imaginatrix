@@ -1,0 +1,94 @@
+// cluster_build.comp
+#version 450
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+struct ClusterAABB 
+{
+    vec4 minPoint;
+    vec4 maxPoint;
+};
+
+// Set 0: Global Resources
+layout(std430, binding = 2) writeonly buffer ClusterAABBs 
+{
+    ClusterAABB clusters[];
+};
+
+layout(push_constant) uniform Constants 
+{
+    mat4 invProjection;
+    float zNear;
+    float zFar;
+    uint gridX;
+    uint gridY;
+    uint gridZ;
+} push;
+
+// Helper to convert screen space coordinate to view space
+vec4 screenToView(vec4 screenPos) 
+{
+    vec4 viewPos = push.invProjection * screenPos;
+    return viewPos / viewPos.w;
+}
+
+
+void main() 
+{
+    uint x = gl_GlobalInvocationID.x;
+    uint y = gl_GlobalInvocationID.y;
+    uint z = gl_GlobalInvocationID.z;
+    uint clusterIndex = x + y * push.gridX + z * push.gridX * push.gridY;
+
+    // Calculate the view-space Z-near and Z-far for this slice (Exponential split)
+    float sliceNear = push.zNear * pow(push.zFar / push.zNear, float(z) / float(push.gridZ));
+    float sliceFar  = push.zNear * pow(push.zFar / push.zNear, float(z + 1) / float(push.gridZ));
+
+    // Calculate the tile size in Normalized Device Coordinates [-1, 1]
+    vec2 texelSize = 1.0 / vec2(push.gridX, push.gridY);
+    vec2 minUV = vec2(x, y) * texelSize;
+    vec2 maxUV = vec2(x + 1, y + 1) * texelSize;
+
+
+    vec2 minNDC = minUV * 2.0 - 1.0;
+    vec2 maxNDC = maxUV * 2.0 - 1.0;
+
+    // Project 4 corners of the tile onto both Near and Far planes of the slice
+    // We treat 'z' in NDC as 0 for Near and 1 for Far (standard Vulkan depth)
+    vec3 nearCorners[4];
+    nearCorners[0] = screenToView(vec4(minNDC.x, minNDC.y, 0.0, 1.0)).xyz;
+    nearCorners[1] = screenToView(vec4(maxNDC.x, minNDC.y, 0.0, 1.0)).xyz;
+    nearCorners[2] = screenToView(vec4(minNDC.x, maxNDC.y, 0.0, 1.0)).xyz;
+    nearCorners[3] = screenToView(vec4(maxNDC.x, maxNDC.y, 0.0, 1.0)).xyz;
+
+    vec3 farCorners[4];
+    farCorners[0] = screenToView(vec4(minNDC.x, minNDC.y, 1.0, 1.0)).xyz;
+    farCorners[1] = screenToView(vec4(maxNDC.x, minNDC.y, 1.0, 1.0)).xyz;
+    farCorners[2] = screenToView(vec4(minNDC.x, maxNDC.y, 1.0, 1.0)).xyz;
+    farCorners[3] = screenToView(vec4(maxNDC.x, maxNDC.y, 1.0, 1.0)).xyz;
+
+    // Clip these corners to the actual depth slice Z-range
+    // Because screenToView with NDC Z=0/1 gives points on the camera near/far planes,
+    // Intersect the rays with the slice planes to get tight AABBs.
+    vec3 minPoint = vec3(100000.0);
+    vec3 maxPoint = vec3(-100000.0);
+
+
+
+    for(int i = 0; i < 4; i++) {
+        // Ray from origin through near corner to far corner
+        // We only care about the X and Y at the specific sliceNear and sliceFar depths
+        minPoint = min(minPoint, nearCorners[i] * (sliceNear / abs(nearCorners[i].z)));
+        minPoint = min(minPoint, nearCorners[i] * (sliceFar / abs(nearCorners[i].z)));
+        maxPoint = max(maxPoint, nearCorners[i] * (sliceNear / abs(nearCorners[i].z)));
+        maxPoint = max(maxPoint, nearCorners[i] * (sliceFar / abs(nearCorners[i].z)));
+    }
+
+    // Explicitly clamp the Z to the slice range
+    // Note: View space Z is typically negative
+    minPoint.z = -sliceFar; 
+    maxPoint.z = -sliceNear;
+
+    clusters[clusterIndex].minPoint = vec4(minPoint, 1.0);
+    clusters[clusterIndex].maxPoint = vec4(maxPoint, 1.0);
+}

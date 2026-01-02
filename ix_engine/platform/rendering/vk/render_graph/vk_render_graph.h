@@ -31,6 +31,9 @@ namespace ix
             m_registry.registerExternalBuffer(name, buffer);
         }
 
+        // Get a pass by its name
+        RenderGraphPass_I* getPass(const std::string& name) const;
+
         void clearExternalResources() { m_registry.clearExternalResources(); }
     private:
         void transitionResource(VkCommandBuffer cmd, const ResourceRequest& request);

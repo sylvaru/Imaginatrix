@@ -34,31 +34,71 @@ void GameLayer::onAttach()
     auto& scene = SceneManager::getActiveScene();
     auto& assetManager = AssetManager::get();
 
-    AssetHandle meshHandle = assetManager.loadModel("sphere.gltf");
-    TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
+    //AssetHandle meshHandle = assetManager.loadModel("sphere.gltf");
+    //TextureHandle texHandle = assetManager.loadTexture("wood_floor.jpg", false);
 
-    for (int x = -10; x < 10; x++)
+    //for (int x = -10; x < 10; x++)
+    //{
+    //    for (int y = 0; y < 6; y++)
+    //    {
+    //        for (int z = -10; z < 10; z++)
+    //        {
+    //            auto entity = scene.createEntity("SphereInstance");
+    //            auto& tc = entity.addComponent<TransformComponent>();
+
+    //            tc.position =
+    //            {
+    //                static_cast<float>(x) * 10.0f,
+    //                static_cast<float>(y) * 10.0f,
+    //                static_cast<float>(z) * 10.0f
+    //            };
+
+    //            tc.scale = { 1.f, 1.f, 1.f};
+
+    //            entity.addComponent<MeshComponent>(meshHandle, texHandle);
+    //        }
+
+    //    }
+    //}
+
+
+
+
+    // Stress test for forward + 
+
+    AssetHandle lightMesh = assetManager.loadModel("sphere.gltf");
+
+    // Scatter 150 lights to see the clustering in action
+    const int lightCount = 150;
+
+    // Seed for consistent randomness during testing
+    srand(42);
+
+    for (int i = 0; i < lightCount; ++i)
     {
-        for (int y = 0; y < 6; y++)
-        {
-            for (int z = -10; z < 10; z++)
-            {
-                auto entity = scene.createEntity("SphereInstance");
-                auto& tc = entity.addComponent<TransformComponent>();
+        auto light = scene.createEntity("TestLight_" + std::to_string(i));
+        auto& tc = light.addComponent<TransformComponent>();
 
-                tc.position =
-                {
-                    static_cast<float>(x) * 10.0f,
-                    static_cast<float>(y) * 10.0f,
-                    static_cast<float>(z) * 10.0f
-                };
+        float x = ((float)(rand() % 600) / 10.0f) - 30.0f;
+        float y = 1.5f;
+        float z = ((float)(rand() % 600) / 10.0f) - 30.0f;
 
-                tc.scale = { 1.f, 1.f, 1.f};
+        tc.setPosition({ x, y, z });
+        tc.setScale({ 0.1f, 0.1f, 0.1f });
 
-                entity.addComponent<MeshComponent>(meshHandle, texHandle);
-            }
+        auto& plc = light.addComponent<PointLightComponent>();
 
-        }
+        // Random vibrant colors
+        plc.color = glm::vec3(
+            (rand() % 100) / 100.0f,
+            (rand() % 100) / 100.0f,
+            (rand() % 100) / 100.0f
+        );
+
+        plc.intensity = 3.0f;
+        plc.radius = 30.0f;
+
+        light.addComponent<MeshComponent>(lightMesh); 
     }
 }
 

@@ -96,11 +96,12 @@ namespace ix
 			float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 			auto camera = SceneManager::getActiveCameraMatrices(aspect);
 
-			SceneView view;
+			SceneView view{};
 			view.deltaTime = static_cast<float>(frameTime);
 			// TODO: Add total time
 			view.viewMatrix = camera.getView();
 			view.projectionMatrix = camera.getProj();
+			view.clusterProjection = camera.getClusterProj();
 			view.cameraPosition = camera.getPos();
 
 			FrameContext frameCtx;

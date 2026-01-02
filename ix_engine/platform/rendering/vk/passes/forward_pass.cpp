@@ -20,6 +20,10 @@ namespace ix
     {
         builder.write("BackBuffer");
         builder.read("DepthBuffer");
+
+        builder.read("LightGridBuffer");
+        builder.read("LightIndexBuffer");
+
         m_cachedPipeline = builder.getPipelineManager()->getGraphicsPipeline("ForwardPass");
     }
 
@@ -92,6 +96,19 @@ namespace ix
         vkCmdBindVertexBuffers(cmd, 0, 1, &vboHandle, &offset);
         vkCmdBindIndexBuffer(cmd, iboWrapper->getBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
+ 
+
+        // Draw
+        vkCmdDrawIndexedIndirect(
+            cmd,
+            culledBuffer->getBuffer(),
+            0,
+            state.frame.renderBatches->size(),
+            sizeof(GPUIndirectCommand)
+        );
+
+        vkCmdEndRendering(cmd);
+
         // Log
         static bool debug_log_once = true;
         if (debug_log_once) {
@@ -117,17 +134,5 @@ namespace ix
 
             debug_log_once = false;
         }
-
-        // Draw
-        vkCmdDrawIndexedIndirect(
-            cmd,
-            culledBuffer->getBuffer(),
-            0,
-            state.frame.renderBatches->size(),
-            sizeof(GPUIndirectCommand)
-        );
-
-
-        vkCmdEndRendering(cmd);
     }
 }

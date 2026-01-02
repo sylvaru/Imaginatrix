@@ -19,6 +19,8 @@
 #include "platform/rendering/vk/passes/equirect_to_cube_pass.h"
 #include "platform/rendering/vk/passes/compute_culling_pass.h"
 #include "platform/rendering/vk/passes/imgui_pass.h"
+#include "platform/rendering/vk/passes/cluster_build_pass.h"
+#include "platform/rendering/vk/passes/cluster_culling_pass.h"
 
 
 #include "core/asset_manager.h"
@@ -35,7 +37,7 @@ namespace ix
 {
 	VulkanRenderer::VulkanRenderer(Window_I& window) 
 		: m_window(window)
-		, m_instance(std::make_unique<VulkanInstance>("Imaginatrix Engine"))
+		, m_instance(std::make_unique<VulkanInstance>("Imaginatrix Renderer"))
 		, m_context(std::make_unique<VulkanContext>(*m_instance, m_window))
 		, m_pipelineManager(std::make_unique<VulkanPipelineManager>(*m_context))
 		, m_renderGraph(std::make_unique<RenderGraph>())
@@ -55,7 +57,7 @@ namespace ix
 		createCommandBuffers();
 		createDescriptorAndPipelineLayouts();
 
-		// Initialize Global UBO Buffers
+		// Init Global UBO Buffers
 		m_globalUboBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 		for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
@@ -68,7 +70,60 @@ namespace ix
 			m_globalUboBuffers[i]->map();
 		}
 
-		// Initialize Instance Database (Input)
+		// Init light buffers
+		m_lightBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			m_lightBuffers[i] = std::make_unique<VulkanBuffer>(
+				*m_context,
+				sizeof(LightData),
+				1,
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				VMA_MEMORY_USAGE_CPU_TO_GPU);
+			m_lightBuffers[i]->map();
+		}
+
+		// Init light grid buffer
+		m_lightGridBuffer = std::make_unique<VulkanBuffer>(
+			*m_context,
+			sizeof(LightGrid) * (16 * 9 * 24),
+			1,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY
+		);
+		
+		// Init cluster AABB buffer
+		uint32_t clusterCount = 16 * 9 * 24;
+		m_clusterAABBbuffer = std::make_unique<VulkanBuffer>(
+			*m_context,
+			sizeof(ClusterAABB),
+			clusterCount,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY
+		);
+
+		// Init light cache
+		m_cpuLightCache = std::make_unique<LightData>();
+
+		// Init light index buffer
+		m_lightIndexListBuffer = std::make_unique<VulkanBuffer>(
+			*m_context,
+			sizeof(uint32_t) * (16 * 9 * 24) * 100, // Max 100 lights per cluster
+			1,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY
+		);
+
+		// Init atomic counter buffer
+		m_atomicCounterBuffer = std::make_unique<VulkanBuffer>(
+			*m_context,
+			sizeof(uint32_t),
+			1,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VMA_MEMORY_USAGE_GPU_ONLY
+		);
+
+
+		// Init Instance Database (Input)
 		m_instanceBuffer = std::make_unique<VulkanBuffer>(
 			*m_context,
 			sizeof(GPUInstanceData) * 3000,
@@ -78,7 +133,9 @@ namespace ix
 		);
 		m_instanceBuffer->map();
 
-		// Initialize Culled Instance Buffer (Commands + Filtered Data)
+
+
+		// Init Culled Instance Buffer (Commands + Filtered Data)
 		const uint32_t MAX_BATCHES = 16;
 		const VkDeviceSize commandHeaderSize = 1024;
 
@@ -90,7 +147,7 @@ namespace ix
 			VMA_MEMORY_USAGE_GPU_ONLY
 		);
 
-		// Initialize Bindless Textures
+		// Init Bindless Textures
 		m_bindlessPool = m_descriptorManagers[0]->createBindlessPool(1, 1000);
 		m_descriptorManagers[0]->allocateBindless(m_bindlessPool, &m_bindlessDescriptorSet, m_bindlessLayout, 1000);
 
@@ -103,9 +160,21 @@ namespace ix
 
 			// Set 0: Global UBO (Binding 0)
 			mgr->allocate(&sets.globalSet, m_globalDescriptorLayout);
+
 			auto uboInfo = m_globalUboBuffers[i]->descriptorInfo();
+			auto lightBufferInfo = m_lightBuffers[i]->descriptorInfo();
+			auto clusterAABBInfo = m_clusterAABBbuffer->descriptorInfo();
+			auto gridInfo = m_lightGridBuffer->descriptorInfo();
+			auto indexListInfo = m_lightIndexListBuffer->descriptorInfo();
+			auto atomicInfo = m_atomicCounterBuffer->descriptorInfo();
+
 			DescriptorWriter()
 				.writeBuffer(0, &uboInfo, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+				.writeBuffer(1, &lightBufferInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+				.writeBuffer(2, &clusterAABBInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+				.writeBuffer(3, &gridInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)     
+				.writeBuffer(4, &indexListInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+				.writeBuffer(5, &atomicInfo, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
 				.updateSet(*m_context, sets.globalSet);
 
 			// Set 2 (Forward)
@@ -172,7 +241,9 @@ namespace ix
 
 		// Update CPU Data (UBO and Instance Database)
 		updateGlobalUbo(view);
+		updateLightBuffer(view);
 		updateInstanceBuffer();
+		
 
 		// Start Recording
 		VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -232,6 +303,7 @@ namespace ix
 		ctx.cullingDescriptorSet = bakedSets.cullingSet;
 		ctx.bindlessDescriptorSet = m_bindlessDescriptorSet;
 
+		ctx.atomicCounterBuffer = m_atomicCounterBuffer->getBuffer();
 		ctx.instanceCount = m_currentInstanceCount;
 		ctx.renderBatches = &m_renderBatches;
 
@@ -260,6 +332,34 @@ namespace ix
 		}
 
 		m_renderGraph->execute(state);
+	}
+
+	void VulkanRenderer::updateLightBuffer(const SceneView& view) 
+	{
+		auto& scene = SceneManager::getActiveScene();
+		auto& registry = scene.getRegistry();
+
+		// Standard view for lights
+		auto lightView = registry.view<TransformComponent, PointLightComponent>();
+
+		uint32_t lightCount = 0;
+		lightView.each([&](auto entity, auto& transform, auto& light) {
+			if (lightCount >= 1024) return; // limit for SSBO size
+
+			// Convert world position to View Space
+			glm::vec4 worldPos = glm::vec4(transform.position, 1.0f);
+			glm::vec4 viewPos = view.viewMatrix * worldPos;
+
+			m_cpuLightCache->lights[lightCount].position = viewPos;
+			m_cpuLightCache->lights[lightCount].position.w = light.radius; // Pack radius into W
+			m_cpuLightCache->lights[lightCount].color = glm::vec4(light.color, light.intensity);
+
+			lightCount++;
+			});
+
+		m_cpuLightCache->count = lightCount;
+
+		m_lightBuffers[m_currentFrameIndex]->writeToBuffer(m_cpuLightCache.get(), sizeof(LightData));
 	}
 
 	void VulkanRenderer::updateInstanceBuffer()
@@ -372,6 +472,12 @@ namespace ix
 		m_globalUboData.time = view.totalTime;
 		m_globalUboData.deltaTime = view.deltaTime;
 
+		auto extent = m_swapchain->getExtent();
+		m_globalUboData.screenResolution = glm::vec2(
+			static_cast<float>(extent.width),
+			static_cast<float>(extent.height)
+		);
+
 		// External scene parameters
 		m_globalUboData.skyboxIntensity = scene.getSkyboxIntensity();
 
@@ -408,6 +514,7 @@ namespace ix
 		writer.writeImage(0, &imageInfo, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, slot);
 		writer.updateSet(*m_context, m_bindlessDescriptorSet);
 	}
+
 
 	void VulkanRenderer::endFrame(const FrameContext& ctx)
 	{
@@ -456,6 +563,8 @@ namespace ix
 
 	void VulkanRenderer::compileRenderGraph()
 	{
+		auto clusterBuildPass = std::make_unique<ClusterBuildPass>("ClusterBuild");
+		auto clusterCullingPass = std::make_unique<ClusterCullingPass>("ClusterCulling");
 		auto depthPrePass = std::make_unique<DepthPrePass>("DepthPrePass");
 		auto forwardPass = std::make_unique<ForwardPass>("MainForward");
 		auto equirectToCubePass = std::make_unique<EquirectToCubemapPass>("ComputePass");
@@ -466,10 +575,17 @@ namespace ix
 		m_renderGraphCompileConfig.context = m_context.get();
 		m_renderGraphCompileConfig.pipelineManager = m_pipelineManager.get();
 
+		m_renderGraph->importBuffer("ClusterAABBbuffer", m_clusterAABBbuffer.get());
+		m_renderGraph->importBuffer("LightGridBuffer", m_lightGridBuffer.get());
+		m_renderGraph->importBuffer("LightIndexBuffer", m_lightIndexListBuffer.get());
+		m_renderGraph->importBuffer("AtomicCounter", m_atomicCounterBuffer.get());
 		m_renderGraph->importBuffer("InstanceDb", m_instanceBuffer.get());
 		m_renderGraph->importBuffer("CulledInstances", m_culledInstanceBuffer.get());
 
+
+		m_renderGraph->addPass(std::move(clusterBuildPass));
 		m_renderGraph->addPass(std::move(computeCullingPass));
+		m_renderGraph->addPass(std::move(clusterCullingPass));
 		m_renderGraph->addPass(std::move(depthPrePass));
 		m_renderGraph->addPass(std::move(forwardPass));
 		m_renderGraph->addPass(std::move(equirectToCubePass));
@@ -562,13 +678,19 @@ namespace ix
 
 	void VulkanRenderer::createDescriptorAndPipelineLayouts()
 	{
-		// Set 0: Global UBO
-		VkDescriptorSetLayoutBinding globalBinding = { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, nullptr };
+		// Set 0: Global
+		std::vector<VkDescriptorSetLayoutBinding> globalBindings = {
+		{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }, // Global UBO
+		{ 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }, // Point Lights
+		{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }, // Cluster AABBs
+		{ 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }, // Light Grid
+		{ 4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }, // Light Index List
+		{ 5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_ALL, nullptr }  // Atomic counter
+		};
 
 		VkDescriptorSetLayoutCreateInfo uboCI{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-		uboCI.bindingCount = 1;
-		uboCI.pBindings = &globalBinding;
+		uboCI.bindingCount = static_cast<uint32_t>(globalBindings.size());
+		uboCI.pBindings = globalBindings.data();
 		vkCreateDescriptorSetLayout(m_context->device(), &uboCI, nullptr, &m_globalDescriptorLayout);
 
 		// Set 1: Bindless Textures
@@ -703,10 +825,21 @@ namespace ix
 			m_renderGraph->importImage("BackBuffer", m_swapchain->getImageWrapper(startIdx));
 			m_renderGraph->importImage("DepthBuffer", m_depthImage.get());
 
+			m_renderGraph->importBuffer("ClusterAABBbuffer", m_clusterAABBbuffer.get());
+			m_renderGraph->importBuffer("LightGridBuffer", m_lightGridBuffer.get());
+			m_renderGraph->importBuffer("LightIndexBuffer", m_lightIndexListBuffer.get());
+			m_renderGraph->importBuffer("AtomicCounter", m_atomicCounterBuffer.get());
 			m_renderGraph->importBuffer("InstanceDb", m_instanceBuffer.get());
 			m_renderGraph->importBuffer("CulledInstances", m_culledInstanceBuffer.get());
 
 			m_renderGraph->compile(m_renderGraphCompileConfig);
+
+			auto* basePass = m_renderGraph->getPass("ClusterBuild");
+			if (basePass)
+			{
+				auto* buildPass = static_cast<ClusterBuildPass*>(basePass);
+				buildPass->forceRebuild();
+			}
 		}
 		m_needsSwapchainRecreation = false;
 		spdlog::info("Recreating Swapchain: Finished successfully");
@@ -843,10 +976,17 @@ namespace ix
 		m_depthImage.reset();
 		m_descriptorManagers.clear();
 		m_globalUboBuffers.clear();
-		m_instanceBuffer.reset();
-		m_culledInstanceBuffer.reset();
 		m_frameDescriptorSets.clear();
 
+		m_instanceBuffer.reset();
+		m_culledInstanceBuffer.reset();
+		m_lightBuffers.clear();
+		m_clusterAABBbuffer.reset();
+		m_lightIndexListBuffer.reset();
+		m_lightGridBuffer.reset();
+		m_cpuLightCache.reset();
+		m_atomicCounterBuffer.reset();
+	
 
 		if (m_bindlessPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(m_context->device(), m_bindlessPool, nullptr);
 		if (m_bindlessLayout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(m_context->device(), m_bindlessLayout, nullptr);

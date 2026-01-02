@@ -33,10 +33,12 @@ namespace ix
         {
             glm::mat4 view;
             glm::mat4 projection;
+            glm::mat4 clusterProjection;
             glm::vec3 position;
 
             const glm::mat4& getView() const { return view; }
             const glm::mat4& getProj() const { return projection; }
+            const glm::mat4& getClusterProj() const { return clusterProjection; }
             const glm::vec3& getPos() const { return position; }
 
         };

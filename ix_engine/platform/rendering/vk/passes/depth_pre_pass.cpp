@@ -36,7 +36,7 @@ namespace ix
 
         VkExtent2D extent = depthImage->getExtent();
 
-        // Setup Depth-Only Rendering (No color attachments!)
+        // Setup Depth-Only Rendering
         VkRenderingAttachmentInfo depthAttachment{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
         depthAttachment.imageView = depthImage->getView();
         depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
@@ -61,7 +61,6 @@ namespace ix
 
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_cachedPipeline->getHandle());
 
-        // Reuse the same descriptor sets (Global UBO and Instance Data)
         VkDescriptorSet sets[] = {
            state.frame.globalDescriptorSet,
            state.frame.bindlessDescriptorSet,

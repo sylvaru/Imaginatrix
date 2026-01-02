@@ -45,6 +45,7 @@ namespace ix
         pcs.viewProj = state.view.projectionMatrix * state.view.viewMatrix;
         pcs.maxInstances = state.frame.instanceCount;
         pcs.debugCulling = false; // toggle debug culling
+
         for (size_t i = 0; i < state.frame.renderBatches->size() && i < 16; ++i) 
         {
             pcs.batchOffsets[i] = (*state.frame.renderBatches)[i].firstInstance;

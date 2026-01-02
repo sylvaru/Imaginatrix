@@ -1,0 +1,91 @@
+// cluster_culling.comp
+#version 450
+
+// local_size_x = 16 means one cluster per workgroup, 
+// with 16 threads collaborating to check the light list.
+layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
+
+struct GPUPointLight {
+    vec4 position;  // xyz = position, w = radius
+    vec4 color;     // rgb = color, w = intensity
+};
+
+struct LightData {
+    uint count;
+    uint pad0; uint pad1; uint pad2;
+    GPUPointLight lights[1024];
+};
+
+struct ClusterAABB {
+    vec4 minPoint;
+    vec4 maxPoint;
+};
+
+struct LightGrid {
+    uint offset;
+    uint count;
+};
+
+// Set 0: Global Bindings
+layout(std430, binding = 1) readonly buffer _LightBuffer { LightData lightData; };
+layout(std430, binding = 2) readonly buffer _ClusterAABBs { ClusterAABB clusters[]; };
+layout(std430, binding = 3) writeonly buffer _LightGridBuffer { LightGrid grid[]; };
+layout(std430, binding = 4) writeonly buffer _LightIndexBuffer { uint indexList[]; };
+layout(std430, binding = 5) buffer _AtomicCounter { uint globalIndexCount; };
+
+// Shared memory for this specific cluster (one workgroup)
+shared uint sharedLightCount;
+shared uint sharedLightIndices[256]; 
+shared uint sharedGlobalOffset;
+
+void main() {
+    // Determine which cluster this workgroup is processing
+    uint clusterIndex = gl_WorkGroupID.x + 
+                        gl_WorkGroupID.y * 16 + 
+                        gl_WorkGroupID.z * 16 * 9;
+                        
+    if (gl_LocalInvocationID.x == 0) {
+        sharedLightCount = 0;
+    }
+    barrier();
+
+    ClusterAABB aabb = clusters[clusterIndex];
+
+    // Cull lights against the AABB
+    // 16 threads loop through 1024 lights (64 iterations each)
+    for (uint i = gl_LocalInvocationID.x; i < lightData.count; i += 16) {
+        GPUPointLight light = lightData.lights[i];
+        float radius = light.position.w;
+        
+        // Squared distance check between Sphere and AABB
+        float distSq = 0.0;
+        for (int j = 0; j < 3; j++) {
+            float v = light.position[j];
+            if (v < aabb.minPoint[j]) distSq += (aabb.minPoint[j] - v) * (aabb.minPoint[j] - v);
+            if (v > aabb.maxPoint[j]) distSq += (v - aabb.maxPoint[j]) * (v - aabb.maxPoint[j]);
+        }
+
+        if (distSq <= (radius * radius)) {
+            uint slot = atomicAdd(sharedLightCount, 1);
+            if (slot < 256) {
+                sharedLightIndices[slot] = i;
+            }
+        }
+    }
+
+    barrier(); // Wait for all 16 threads to finish culling
+
+    // One thread reserves the global space
+    if (gl_LocalInvocationID.x == 0) {
+        sharedGlobalOffset = atomicAdd(globalIndexCount, sharedLightCount);
+        grid[clusterIndex].offset = sharedGlobalOffset;
+        grid[clusterIndex].count = sharedLightCount;
+    }
+    
+    barrier(); // Wait for the offset to be returned
+
+    // Copy found light indices to the global index list
+    for (uint i = gl_LocalInvocationID.x; i < sharedLightCount; i += 16) {
+        indexList[sharedGlobalOffset + i] = sharedLightIndices[i];
+    }
+}

@@ -51,6 +51,12 @@ add_library(ix_engine STATIC
     platform/rendering/vk/passes/skybox_pass.cpp
     platform/rendering/vk/passes/imgui_pass.h
     platform/rendering/vk/passes/imgui_pass.cpp
+    platform/rendering/vk/passes/depth_pre_pass.h
+    platform/rendering/vk/passes/depth_pre_pass.cpp
+    platform/rendering/vk/passes/cluster_culling_pass.h
+    platform/rendering/vk/passes/cluster_culling_pass.cpp
+    platform/rendering/vk/passes/cluster_build_pass.h
+    platform/rendering/vk/passes/cluster_build_pass.cpp
 
     # Core
     core/asset_manager.h
@@ -66,7 +72,7 @@ add_library(ix_engine STATIC
 
     engine.h
     engine.cpp
-     "platform/rendering/vk/passes/depth_pre_pass.h" "platform/rendering/vk/passes/depth_pre_pass.cpp")
+    )
 
 target_precompile_headers(ix_engine
     PRIVATE

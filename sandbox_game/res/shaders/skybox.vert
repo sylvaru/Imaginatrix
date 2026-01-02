@@ -9,9 +9,11 @@ layout(set = 0, binding = 0) uniform GlobalUbo
     mat4 projection;
     mat4 view;
     vec4 cameraPos;
+    vec2 screenResolution;
     float time;
     float deltaTime;
     float skyboxIntensity;
+    float _padding;
 } ubo;
 
 vec3 pos[8] = vec3[8](

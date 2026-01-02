@@ -1,17 +1,17 @@
-// compute_culling_pass.h
+// cluster_culling_pass.h
 #pragma once
 #include "render_graph_pass_i.h"
 
-namespace ix 
+namespace ix
 {
     class VulkanComputePipeline;
 
 
-    class ComputeCullingPass : public RenderGraphPass_I 
+    class ClusterCullingPass : public RenderGraphPass_I
     {
     public:
-        ComputeCullingPass(const std::string& name);
-        virtual ~ComputeCullingPass() = default;
+        ClusterCullingPass(const std::string& name);
+        virtual ~ClusterCullingPass() = default;
         PassType getPassType() const override { return PassType::Compute; }
 
         void setup(RenderGraphBuilder& builder) override;

@@ -17,6 +17,7 @@ namespace ix
         alignas(16) glm::mat4 projection{ 1.f };
         alignas(16) glm::mat4 view{ 1.f };
         alignas(16) glm::vec4 cameraPos{ 0.f };
+        alignas(8) glm::vec2 screenResolution;
 
         float time{ 0.0f };
         float deltaTime{ 0.0f };
@@ -30,37 +31,43 @@ namespace ix
         VulkanPipelineManager* pipelineManager;
     };
 
-    struct GPUIndirectCommand
-    {
-        uint32_t indexCount;      // 4 bytes  - Number of indices to draw
-        uint32_t instanceCount;   // 4 bytes  - Number of instances to draw (updated by Compute)
-        uint32_t firstIndex;      // 4 bytes  - First index in the index buffer
-        int32_t  vertexOffset;    // 4 bytes  - Value added to each index before addressing vertex buffer
-        uint32_t firstInstance;   // 4 bytes  - Instance index for the first instance drawn (0 in our setup)
-        uint32_t _padding[11];    // 44 bytes - Pad to 64 bytes total for alignment and batch-indexing
 
-        // Total: 64 bytes
-        // This padding ensures that each command in a buffer is 64-byte aligned, 
-        // matching the stride used in vkCmdDrawIndexedIndirect and GLSL culledData.
+
+    struct ClusterConstants 
+    {
+        glm::mat4 invProjection;
+        float zNear;
+        float zFar;
+        uint32_t gridX;
+        uint32_t gridY;
+        uint32_t gridZ;
     };
 
-    struct alignas(16) GPUInstanceData 
+    struct LightGrid 
     {
-        glm::mat4 modelMatrix;    // 64 bytes
-        uint32_t  textureIndex;   // 4 bytes
-        float     boundingRadius; // 4 bytes
-        uint32_t  batchID;        // 4 bytes
-        uint32_t  _padding;       // 4 bytes (Makes struct 80 bytes total)
+        uint32_t offset;
+        uint32_t count;
     };
 
-    struct CullingPushConstants
+    struct ClusterAABB
     {
-        glm::mat4 viewProj;          // 64 bytes - Camera View-Projection matrix
-        uint32_t  maxInstances;      // 4 bytes  - Total instances to process
-        uint32_t  debugCulling;      // 4 bytes  - Toggle for culling visualization
-        uint32_t  batchOffsets[16];  // 64 bytes - Start index for each batch in output
-        // Total: 136 bytes 
+        glm::vec4 minPoint; 
+        glm::vec4 maxPoint; 
     };
+
+    struct GPUPointLight 
+    {
+        glm::vec4 position;  // xyz = position, w = radius
+        glm::vec4 color;     // rgb = color, w = intensity
+    };
+
+    struct LightData 
+    {
+        uint32_t count;
+        float padding[3];
+        GPUPointLight lights[1024];
+    };
+
 
 
     struct RenderBatch
@@ -95,6 +102,9 @@ namespace ix
         // Batching & Culling results
         uint32_t instanceCount;
         const std::vector<RenderBatch>* renderBatches;
+
+        // Misc
+        VkBuffer atomicCounterBuffer;
     };
 
     // Constant Data
@@ -104,6 +114,7 @@ namespace ix
         float totalTime;
         glm::mat4 viewMatrix;
         glm::mat4 projectionMatrix;
+        glm::mat4 clusterProjection;
         glm::vec3 cameraPosition;
     };
 
@@ -138,6 +149,38 @@ namespace ix
         VkDescriptorSet globalSet;      // Set 0: Global UBO
         VkDescriptorSet instanceSet;    // Set 2: Culled Instance Data (For Forward Pass)
         VkDescriptorSet cullingSet;     // Set 2: Input + Output Data (For Compute Pass)
+    };
+
+    struct GPUIndirectCommand
+    {
+        uint32_t indexCount;      // 4 bytes  - Number of indices to draw
+        uint32_t instanceCount;   // 4 bytes  - Number of instances to draw (updated by Compute)
+        uint32_t firstIndex;      // 4 bytes  - First index in the index buffer
+        int32_t  vertexOffset;    // 4 bytes  - Value added to each index before addressing vertex buffer
+        uint32_t firstInstance;   // 4 bytes  - Instance index for the first instance drawn (0 in our setup)
+        uint32_t _padding[11];    // 44 bytes - Pad to 64 bytes total for alignment and batch-indexing
+
+        // Total: 64 bytes
+        // This padding ensures that each command in a buffer is 64-byte aligned, 
+        // matching the stride used in vkCmdDrawIndexedIndirect and GLSL culledData.
+    };
+
+    struct alignas(16) GPUInstanceData
+    {
+        glm::mat4 modelMatrix;    // 64 bytes
+        uint32_t  textureIndex;   // 4 bytes
+        float     boundingRadius; // 4 bytes
+        uint32_t  batchID;        // 4 bytes
+        uint32_t  _padding;       // 4 bytes (Makes struct 80 bytes total)
+    };
+
+    struct CullingPushConstants
+    {
+        glm::mat4 viewProj;          // 64 bytes - Camera View-Projection matrix
+        uint32_t  maxInstances;      // 4 bytes  - Total instances to process
+        uint32_t  debugCulling;      // 4 bytes  - Toggle for culling visualization
+        uint32_t  batchOffsets[16];  // 64 bytes - Start index for each batch in output
+        // Total: 136 bytes 
     };
 
 

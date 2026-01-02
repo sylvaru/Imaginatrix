@@ -112,4 +112,16 @@ namespace ix
 
         spdlog::error("RenderGraph: Resource '{}' has no physical image or buffer bound!", request.name);
     }
+
+    RenderGraphPass_I* RenderGraph::getPass(const std::string& name) const
+    {
+        for (const auto& entry : m_compiledPasses)
+        {
+            if (entry.pass->getName() == name)
+            {
+                return entry.pass.get();
+            }
+        }
+        return nullptr;
+    }
 }

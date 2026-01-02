@@ -74,29 +74,24 @@ namespace ix
             });
     }
     Scene::CameraMatrices Scene::getActiveCameraMatrices(float aspect) {
-        CameraMatrices result{ glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f) };
-
+        CameraMatrices result{};
         auto view = m_registry.view<TransformComponent, CameraComponent>();
 
         view.each([&](const auto entity, const auto& transform, const auto& camera) {
             if (camera.primary) {
                 result.position = transform.position;
 
-                // Get the direction vectors from the quaternion
                 glm::vec3 forward = transform.rotation * glm::vec3(0, 0, -1);
                 glm::vec3 up = transform.rotation * glm::vec3(0, 1, 0);
 
                 result.view = glm::lookAt(transform.position, transform.position + forward, up);
 
-                result.projection = glm::perspective(
-                    glm::radians(camera.fov),
-                    aspect,
-                    camera.nearPlane,
-                    camera.farPlane
-                );
+                glm::mat4 proj = glm::perspective(glm::radians(camera.fov), aspect, camera.nearPlane, camera.farPlane);
 
-                // Vulkan Y-axis flip
-                result.projection[1][1] *= -1;
+                result.clusterProjection = proj;
+
+                proj[1][1] *= -1;
+                result.projection = proj;
             }
             });
 

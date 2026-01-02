@@ -18,6 +18,9 @@ namespace ix
     class VulkanDescriptorManager;
     class RenderGraph;
     class VulkanImage;
+    
+    struct LightData;
+
 
 	
 	class VulkanRenderer : public Renderer_I 
@@ -69,6 +72,7 @@ namespace ix
         
         // Misc
         void updateInstanceBuffer();
+        void updateLightBuffer(const SceneView& view);
 
     private:
         // Core Infrastructure
@@ -120,7 +124,12 @@ namespace ix
         std::vector<RenderBatch> m_renderBatches;
         std::vector<GPUInstanceData> m_cpuInstanceCache;
         std::unordered_map<MeshHandle, std::vector<GPUInstanceData>> m_batchMapCache;
-
+        std::vector<std::unique_ptr<VulkanBuffer>> m_lightBuffers;
+        std::unique_ptr<VulkanBuffer> m_clusterAABBbuffer;
+        std::unique_ptr<VulkanBuffer> m_lightIndexListBuffer;// pool of light IDs
+        std::unique_ptr<VulkanBuffer> m_lightGridBuffer;
+        std::unique_ptr<LightData> m_cpuLightCache;
+        std::unique_ptr<VulkanBuffer> m_atomicCounterBuffer;
         // Imgui
         VkDescriptorPool m_imguiPool = VK_NULL_HANDLE;
 

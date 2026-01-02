@@ -107,6 +107,21 @@ namespace ix
                     ctrl.lookSensitivity = item["controller"].value("sensitivity", 0.002f);
                 }
 
+                if (item.contains("pointLight"))
+                {
+                    auto& plc = entity.addComponent<PointLightComponent>();
+                    auto& lJson = item["pointLight"];
+
+                    if (lJson.contains("color")) {
+                        auto c = lJson["color"];
+                        plc.color = { c[0], c[1], c[2] };
+                    }
+                    plc.intensity = lJson.value("intensity", 1.0f);
+                    plc.radius = lJson.value("radius", 10.0f);
+
+                    spdlog::info("SceneManager: Entity '{}' given PointLightComponent", name);
+                }
+
                 // Implicit Asset Loading
                 if (item.contains("mesh")) 
                 {
@@ -127,6 +142,7 @@ namespace ix
                     spdlog::info("SceneManager: Entity '{}' initialized with mesh '{}' (Handle: {})",
                         name, meshName, handle);
                 }
+
             }
         }
 
@@ -153,7 +169,7 @@ namespace ix
 	Scene::CameraMatrices SceneManager::getActiveCameraMatrices(float aspect)
 	{
 		if (!s_activeScene) {
-			return { glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f) };
+			return { glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f), glm::vec3(0.0f) };
 		}
 		return s_activeScene->getActiveCameraMatrices(aspect);
 	}

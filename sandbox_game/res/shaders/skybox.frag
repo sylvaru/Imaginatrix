@@ -13,9 +13,11 @@ layout(set = 0, binding = 0) uniform GlobalUbo
     mat4 projection;
     mat4 view;
     vec4 cameraPos;
+    vec2 screenResolution;
     float time;
     float deltaTime;
     float skyboxIntensity;
+    float _padding;
 } ubo;
 
 // Bindless array of Cubemaps
@@ -28,6 +30,12 @@ layout(std140, push_constant) uniform Push
 
 void main() 
 {
-    vec4 color = texture(skyboxTextures[push.skyboxIdx], normalize(inUVW));
-    outColor = vec4(color.rgb * ubo.skyboxIntensity, color.a);
+    vec3 hdr = texture(skyboxTextures[push.skyboxIdx], normalize(inUVW)).rgb;
+
+    // Soft highlight compression (Reinhard)
+    hdr = hdr / (hdr + vec3(1.0));
+
+    // Apply intensity after compression
+    vec3 color = hdr * ubo.skyboxIntensity;
+    outColor = vec4(color, 1.0);
 }
